@@ -7,7 +7,7 @@ DATASET_ROOT_DIR="/path/to/your/leorbot_style_dataset"
 
 echo "--- 🚀 Starting QLoRA Training ---"
 python train_vlm.py \
-    --model_name_or_path "Qwen/Qwen2.5-VL-7B-Instruct" \
+    --model_name_or_path "/ckpt/Qwen/Qwen2.5-VL-7B-Instruct" \
     --dataset_dir ${DATASET_ROOT_DIR} \
     --output_dir "./results/qwen_vlm_qlora_finetuned" \
     \
@@ -73,7 +73,8 @@ class ModelTrainingArgs:
     Custom arguments for the training script.
     """
     # --- Model and Data Paths ---
-    dataset_dir: str = field(
+    dataset_dir: Optional[str] = field(
+        default=None,
         metadata={"help": "Root directory of the dataset containing sharded .jsonl files (e.g., /data/my_dataset)"}
     )
     model_name_or_path: str = field(
@@ -81,20 +82,6 @@ class ModelTrainingArgs:
         metadata={"help": "Hugging Face path to the VLM to finetune."}
     )
     # output_dir is handled by TrainingArguments
-
-    # --- Training Strategy ---
-    bf16: bool = field(
-        default=True,
-        metadata={"help": "Whether to use bf16 training (recommended for Ampere GPUs)."}
-    )
-    gradient_checkpointing: bool = field(
-        default=True,
-        metadata={"help": "Whether to use gradient checkpointing to save memory."}
-    )
-    dataloader_num_workers: int = field(
-        default=16,
-        metadata={"help": "[v5 Architecture] Number of parallel workers for data loading."}
-    )
 
     # --- PEFT (LoRA/QLoRA) Config ---
     use_lora: bool = field(
@@ -138,6 +125,10 @@ def main():
     parser = HfArgumentParser((TrainingArguments, ModelTrainingArgs))
     training_args, model_args = parser.parse_args_into_dataclasses()
 
+    # --- Required argument checks ---
+    if not model_args.dataset_dir:
+        raise ValueError("`--dataset_dir` is required (path to the dataset root with sharded .jsonl files).")
+
     # --- W&B Setup [Added] ---
     # Set W&B project environment variable from the argument
     # The --report_to argument (part of TrainingArguments) handles enabling/disabling
@@ -159,7 +150,7 @@ def main():
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
             bnb_4bit_use_double_quant=True,
         )
 
@@ -168,7 +159,7 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
         quantization_config=bnb_config,  # bnb_config is applied only if use_qlora=True
-        torch_dtype=torch.bfloat16 if model_args.bf16 else torch.float32,
+        torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
         attn_implementation="flash_attention_2",
         trust_remote_code=True
     )
@@ -200,7 +191,7 @@ def main():
             bias="none"
         )
 
-        if model_args.gradient_checkpointing and not model_args.use_qlora:
+        if training_args.gradient_checkpointing and not model_args.use_qlora:
             model.gradient_checkpointing_enable()
 
         model = get_peft_model(model, peft_config)
@@ -208,7 +199,7 @@ def main():
     else:
         print("✅ Running Full Finetuning (PEFT not enabled).")
         # Enable gradient checkpointing for full finetuning
-        if model_args.gradient_checkpointing:
+        if training_args.gradient_checkpointing:
             model.gradient_checkpointing_enable()
 
     # 7. Print trainable parameters (and get values)
@@ -227,14 +218,14 @@ def main():
     # 10. Configure Trainer Settings
     # [Modified] We no longer need to manually set these from model_args
     # They are already correctly populated in training_args by HfArgumentParser
-    training_args.gradient_checkpointing = model_args.gradient_checkpointing
-    training_args.bf16 = model_args.bf16
-    training_args.dataloader_num_workers = model_args.dataloader_num_workers
-    training_args.remove_unused_columns = False
+    #training_args.gradient_checkpointing = model_args.gradient_checkpointing
+    #training_args.bf16 = model_args.bf16
+    #training_args.dataloader_num_workers = model_args.dataloader_num_workers
+    #training_args.remove_unused_columns = False
 
-    training_args.gradient_checkpointing = model_args.gradient_checkpointing
-    training_args.bf16 = model_args.bf16
-    training_args.dataloader_num_workers = model_args.dataloader_num_workers
+    #training_args.gradient_checkpointing = model_args.gradient_checkpointing
+    #training_args.bf16 = model_args.bf16
+    #training_args.dataloader_num_workers = model_args.dataloader_num_workers
     training_args.remove_unused_columns = False
 
     # 11. Initialize Trainer

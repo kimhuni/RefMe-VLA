@@ -156,7 +156,7 @@ def main():
     processor = AutoProcessor.from_pretrained(
         args.model_name,
         trust_remote_code=True,
-        use_fast=False,
+        use_fast=True,
     )
 
     quant_config = None
@@ -266,8 +266,8 @@ def main():
     val_files = expand_jsonl_paths(args.val_path)
 
     # [핵심 수정] processor (객체) 대신 args.model_name (문자열)을 전달
-    train_ds = VLMJSONDataset(train_files, args.model_name, image_key=args.image_key)
-    val_ds = VLMJSONDataset(val_files, args.model_name, image_key=args.image_key)
+    train_ds = VLMJSONDataset(train_files, args.model_name, image_key=args.image_key)  #
+    val_ds = VLMJSONDataset(val_files, args.model_name, image_key=args.image_key)  #
 
     # [수정] collator는 V4와 동일 (processor가 필요 없음)
     collator = DataCollatorVLM(

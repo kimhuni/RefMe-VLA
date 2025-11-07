@@ -1,15 +1,16 @@
-# dataset_loader.py (REWRITE v5 - PROCESS-LOCAL INIT FIX)
+# dataset_loader.py (REWRITE v6 - PRE-CACHING FIX)
 import json
 from typing import Dict, Any, List
 from dataclasses import dataclass
 import glob
 import logging
-import os  # <-- os.getpid()를 위해 추가
+import os
+from tqdm import tqdm  # <-- 진행률 표시를 위해 tqdm 추가
 
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-from transformers import AutoProcessor  # <-- AutoProcessor 임포트
+from transformers import AutoProcessor
 from torch.nn.utils.rnn import pad_sequence
 
 # 로거 설정
@@ -20,9 +21,7 @@ CAM_FALLBACK_ORDER = ["side", "wrist"]
 
 
 def make_train_prompt(task: str, prev: str, prev_status: str) -> str:
-    """
-    Generate a concise training prompt for image analysis in robot manipulation.
-    """
+    # (V5와 동일)
     return (
         "You are an image-analysis expert for robot manipulation.\n"
         "INPUT_IMAGES: [SIDE]=global scene view; [WRIST]=close-up wrist camera.\n"
@@ -35,10 +34,11 @@ def make_train_prompt(task: str, prev: str, prev_status: str) -> str:
     )
 
 
-# ===== 1) Dataset: 모든 전처리를 여기서 수행 (num_workers 병렬 처리) =====
+# ===== 1) Dataset: [수정] 모든 샘플을 RAM으로 사전 캐싱 =====
 class VLMJSONDataset(Dataset):
     """
-    [V5] __getitem__에서 프로세스-로컬(process-local) 'processor'를 초기화합니다.
+    [V6] __init__에서 모든 샘플을 미리 전처리하여 RAM에 보관합니다.
+    __getitem__은 단지 리스트에서 텐서를 꺼내기만 합니다 (매우 빠름).
     """
 
     def __init__(self, paths: list[str], model_name_or_path: str, image_key: str = "image_path"):
@@ -54,82 +54,49 @@ class VLMJSONDataset(Dataset):
                     except json.JSONDecodeError:
                         logger.warning(f"Skipping bad JSON line {ln} in {jsonl_path}")
 
-        # [수정] processor 객체 대신 'model_name_or_path' (문자열)을 저장
-        self.model_name_or_path = model_name_or_path
         self.image_key = image_key
-        # [수정] processor를 None으로 초기화. 각 워커가 스스로 로드할 것임.
-        self.processor = None
 
-        print(f"[VLMJSONDataset] files={len(paths)} samples={len(self.rows)}")
-        if len(self.rows) > 0:
-            print(f"[VLMJSONDataset] sample_keys={list(self.rows[0].keys())}")
+        # [핵심 수정] 메인 프로세서에서 전용 'processor'를 즉시 로드
+        logger.info(f"Loading processor '{model_name_or_path}' for pre-caching...")
+        processor = AutoProcessor.from_pretrained(
+            model_name_or_path,
+            trust_remote_code=True,
+            use_fast=True  # <-- 빠른 토크나이저 사용
+        )
+
+        logger.info(f"Pre-processing and caching {len(self.rows)} samples into RAM...")
+        # self.processed_samples 리스트에 전처리된 텐서를 저장
+        self.processed_samples = []
+        for i in tqdm(range(len(self.rows)), desc="Caching dataset"):
+            try:
+                # _process_one_sample이 텐서 딕셔너리를 반환
+                self.processed_samples.append(
+                    self._process_one_sample(self.rows[i], processor, i)
+                )
+            except Exception as e:
+                logger.error(f"Failed to process sample {i} ({self.rows[i].get('uid', 'N/A')}): {e}")
+
+        logger.info(f"Caching complete. {len(self.processed_samples)} samples loaded into RAM.")
+        print(f"[VLMJSONDataset] files={len(paths)} samples={len(self.processed_samples)}")
 
     def __len__(self):
-        return len(self.rows)
-
-    def _context_info(self, row: Dict[str, Any]) -> str:
-        parts = []
-        for k in ["uid", "chunk_id", "episode_id", "timestamp_ms"]:
-            if k in row:
-                parts.append(f"{k}={row[k]}")
-        return ", ".join(parts) if parts else "no context"
-
-    def _load_images(self, row: Dict[str, Any]) -> List[Image.Image]:
-        # (이 함수는 V4와 동일)
-        context = self._context_info(row)
-        if "images" in row and isinstance(row["images"], dict):
-            cams = row.get("meta", {}).get("capture", {}).get("cameras")
-            if not cams:
-                present = list(row["images"].keys())
-                ordered = [c for c in CAM_FALLBACK_ORDER if c in present]
-                ordered += sorted([c for c in present if c not in CAM_FALLBACK_ORDER])
-                cams = ordered
-
-            imgs = []
-            for cam in cams:
-                if cam in row["images"]:
-                    path = row["images"][cam]
-                    try:
-                        imgs.append(Image.open(path).convert("RGB"))
-                    except Exception as e:
-                        raise IOError(
-                            f"Failed to load '{cam}' image '{path}' ({context}) at {row.get('_src_file', '?')}:{row.get('_src_line', '?')}: {e}") from e
-            if not imgs:
-                raise ValueError(f"No images could be loaded for sample ({context})")
-            return imgs
-
-        elif self.image_key in row:
-            try:
-                return [Image.open(row[self.image_key]).convert("RGB")]
-            except Exception as e:
-                raise IOError(f"Error loading image '{row[self.image_key]}' for sample ({context}): {e}") from e
-
-        return []
+        return len(self.processed_samples)
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
+        # [핵심 수정] __getitem__은 RAM에 캐시된 딕셔너리를 반환 (초고속)
+        return self.processed_samples[i]
 
-        # --- [핵심 수정] 프로세스-로컬(워커-로컬) processor 초기화 ---
-        if self.processor is None:
-            # 이 로그는 num_workers 수만큼 (여기서는 16번) 출력될 것입니다.
-            logger.info(f"[Worker PID: {os.getpid()}] Initializing processor for this worker...")
-            self.processor = AutoProcessor.from_pretrained(
-                self.model_name_or_path,
-                trust_remote_code=True,
-                use_fast=False  # train_vlm.py와 일관성 유지
-            )
-        # --- 수정 끝 ---
+    # --- 전처리를 위한 헬퍼 함수들 ---
 
-        row = self.rows[i]
+    def _process_one_sample(self, row: Dict[str, Any], processor: AutoProcessor, i: int) -> Dict[str, Any]:
+        """
+        V5의 __getitem__ 로직을 그대로 가져와 단일 샘플을 전처리합니다.
+        """
         context = self._context_info(row)
         debug_id = row.get("uid", f"idx_{i}")
 
-        # (이하 V4 로직과 동일)
         # 1. 이미지 로드 (PIL)
-        try:
-            images = self._load_images(row)
-        except Exception as e:
-            logger.error(f"Error in _load_images for index {i} ({debug_id}): {e}")
-            raise e
+        images = self._load_images(row)
 
         # 2. 텍스트 생성 (str)
         task = row["task"]
@@ -163,40 +130,27 @@ class VLMJSONDataset(Dataset):
         user_messages = [messages[0]]
 
         # 4. 템플릿 -> 문자열 변환
-        try:
-            full_prompt_string = self.processor.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=False
-            )
-        except Exception as e:
-            logger.error(f"Failed to apply chat template (full) for sample {debug_id}: {e}")
-            raise e
+        full_prompt_string = processor.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=False
+        )
 
         # 5. Processor 호출 (이미지+텍스트 동시 전처리)
-        try:
-            enc = self.processor(
-                text=full_prompt_string,
-                images=images,
-                return_tensors="pt",
-                padding=False,
-                truncation=False
-            )
-        except Exception as e:
-            logger.error(f"Processor failed for sample {debug_id}: {e}")
-            logger.error(f"Failed sample string (first 500 chars): {full_prompt_string[:500]}")
-            raise e
+        enc = processor(
+            text=full_prompt_string,
+            images=images,
+            return_tensors="pt",
+            padding=False,
+            truncation=False
+        )
 
         # 6. 수동 레이블 마스킹
-        try:
-            user_part_string = self.processor.tokenizer.apply_chat_template(
-                user_messages, tokenize=False, add_generation_prompt=True
-            )
-            user_token_ids = self.processor.tokenizer(
-                user_part_string, return_tensors="pt", add_special_tokens=True
-            ).input_ids.squeeze(0)
-            user_tokens_len = len(user_token_ids)
-        except Exception as e:
-            logger.error(f"Failed to tokenize user_part for masking on sample {debug_id}: {e}")
-            user_tokens_len = 0
+        user_part_string = processor.tokenizer.apply_chat_template(
+            user_messages, tokenize=False, add_generation_prompt=True
+        )
+        user_token_ids = processor.tokenizer(
+            user_part_string, return_tensors="pt", add_special_tokens=True
+        ).input_ids.squeeze(0)
+        user_tokens_len = len(user_token_ids)
 
         input_ids = enc.input_ids.squeeze(0)
         labels = input_ids.clone()
@@ -221,8 +175,48 @@ class VLMJSONDataset(Dataset):
             "image_grid_thw": grid_thw,  # None일 수도 있음
         }
 
+    def _context_info(self, row: Dict[str, Any]) -> str:
+        # (V5와 동일)
+        parts = []
+        for k in ["uid", "chunk_id", "episode_id", "timestamp_ms"]:
+            if k in row:
+                parts.append(f"{k}={row[k]}")
+        return ", ".join(parts) if parts else "no context"
 
-# ===== 2) Collator: 텐서를 받아 패딩만 수행 (V4와 동일, 빠름) =====
+    def _load_images(self, row: Dict[str, Any]) -> List[Image.Image]:
+        # (V5와 동일)
+        context = self._context_info(row)
+        if "images" in row and isinstance(row["images"], dict):
+            cams = row.get("meta", {}).get("capture", {}).get("cameras")
+            if not cams:
+                present = list(row["images"].keys())
+                ordered = [c for c in CAM_FALLBACK_ORDER if c in present]
+                ordered += sorted([c for c in present if c not in CAM_FALLBACK_ORDER])
+                cams = ordered
+
+            imgs = []
+            for cam in cams:
+                if cam in row["images"]:
+                    path = row["images"][cam]
+                    try:
+                        imgs.append(Image.open(path).convert("RGB"))
+                    except Exception as e:
+                        raise IOError(
+                            f"Failed to load '{cam}' image '{path}' ({context}) at {row.get('_src_file', '?')}:{row.get('_src_line', '?')}: {e}") from e
+            if not imgs:
+                raise ValueError(f"No images could be loaded for sample ({context})")
+            return imgs
+
+        elif self.image_key in row:
+            try:
+                return [Image.open(row[self.image_key]).convert("RGB")]
+            except Exception as e:
+                raise IOError(f"Error loading image '{row[self.image_key]}' for sample ({context}): {e}") from e
+
+        return []
+
+
+# ===== 2) Collator: 텐서를 받아 패딩만 수행 (V5와 동일, 빠름) =====
 @dataclass
 class DataCollatorVLM:
     """
