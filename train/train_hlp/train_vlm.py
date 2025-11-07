@@ -1,22 +1,45 @@
 # 🚅 train_vlm.py
 """
-echo "--- 🚀 Starting Full Finetuning (logging to W&B) ---"
-export WANDB_NAME="qwen-vlm-full-run-1"
+DATASET_ROOT_DIR="/path/to/your/leorbot_style_dataset"
+
+# --- QLoRA (Most VRAM-efficient) ---
+# [Modified] Using standard TrainingArguments for steps, batch size, logging, etc.
+
+echo "--- 🚀 Starting QLoRA Training ---"
 python train_vlm.py \
     --model_name_or_path "Qwen/Qwen2.5-VL-7B-Instruct" \
     --dataset_dir ${DATASET_ROOT_DIR} \
-    --output_dir "./results/qwen_vlm_full_finetuned" \
-    --max_steps 500 \
+    --output_dir "./results/qwen_vlm_qlora_finetuned" \
+    \
+    # --- Training Step & Batch Size ---
+    --max_steps 2000 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 16 \
-    --learning_rate 1e-5 \
-    --dataloader_num_workers 16 \
+    --learning_rate 1e-4 \
+    \
+    # --- Evaluation & Saving ---
+    # --evaluation_strategy "steps" \
+    # --eval_steps 500 \
+    # (Note: eval_dataset must be provided to Trainer for this to work)
+    --save_strategy "steps" \
+    --save_steps 500 \
+    \
+    # --- Core Settings ---
     --bf16 True \
     --gradient_checkpointing True \
+    --dataloader_num_workers 16 \
+    \
+    # --- PEFT / LoRA Settings ---
+    --use_qlora True \
+    --lora_r 16 \
+    --lora_alpha 32 \
+    --target_modules "c_attn,attn.c_proj,w1,w2" \
+    \
+    # --- Logging & W&B ---
     --logging_steps 10 \
-    --save_strategy "steps" \
-    --save_steps 100 \
-    --report_to "wandb"
+    --report_to "wandb" \
+    --wandb_project "vlm-finetune" \
+    --run_name "qwen-vlm-qlora-run-1"
 """
 # 🚅 train_vlm.py
 import os
@@ -50,17 +73,14 @@ class ModelTrainingArgs:
     Custom arguments for the training script.
     """
     # --- Model and Data Paths ---
+    dataset_dir: str = field(
+        metadata={"help": "Root directory of the dataset containing sharded .jsonl files (e.g., /data/my_dataset)"}
+    )
     model_name_or_path: str = field(
         default="Qwen/Qwen2.5-VL-7B-Instruct",
         metadata={"help": "Hugging Face path to the VLM to finetune."}
     )
-    dataset_dir: str = field(
-        metadata={"help": "Root directory of the dataset containing sharded .jsonl files (e.g., /data/my_dataset)"}
-    )
-    output_dir: str = field(
-        default="./results",
-        metadata={"help": "Directory where model checkpoints and results will be saved."}
-    )
+    # output_dir is handled by TrainingArguments
 
     # --- Training Strategy ---
     bf16: bool = field(
@@ -77,7 +97,6 @@ class ModelTrainingArgs:
     )
 
     # --- PEFT (LoRA/QLoRA) Config ---
-    # [Modified] Default is False (Full Finetuning)
     use_lora: bool = field(
         default=False,
         metadata={"help": "Whether to use standard LoRA (default is Full Finetuning)."}
@@ -86,7 +105,6 @@ class ModelTrainingArgs:
         default=False,
         metadata={"help": "Whether to use QLoRA (4-bit quantized LoRA)."}
     )
-
     lora_r: int = field(
         default=16,
         metadata={"help": "LoRA rank (r)."}
@@ -99,16 +117,35 @@ class ModelTrainingArgs:
         default=0.05,
         metadata={"help": "LoRA dropout."}
     )
-    lora_target_modules: str = field(
-        default="c_attn,attn.c_proj,w1,w2",
-        metadata={"help": "Modules to apply LoRA to (comma-separated)."}
+
+    # [Modified] Renamed from lora_target_modules for clarity
+    target_modules: str = field(
+        default="c_attn,attn.c_proj,w1,w2",  # Default for Qwen2.5-VL
+        metadata={"help": "Comma-separated list of module names to apply LoRA to. (e.g., q_proj,v_proj)"}
     )
+
+    # --- W&B Configuration [Added] ---
+    wandb_project: str = field(
+        default="vlm-finetune",
+        metadata={"help": "Weights & Biases project name."}
+    )
+    # Note: wandb_run_name is handled by TrainingArguments' --run_name
+    # Note: wandb_enable is handled by TrainingArguments' --report_to "wandb" or "none"
 
 
 def main():
     # 1. Parse arguments (TrainingArguments + ModelTrainingArgs)
     parser = HfArgumentParser((TrainingArguments, ModelTrainingArgs))
     training_args, model_args = parser.parse_args_into_dataclasses()
+
+    # --- W&B Setup [Added] ---
+    # Set W&B project environment variable from the argument
+    # The --report_to argument (part of TrainingArguments) handles enabling/disabling
+    if training_args.report_to and "wandb" in training_args.report_to:
+        os.environ["WANDB_PROJECT"] = model_args.wandb_project
+        # --run_name (from TrainingArguments) will be used as the W&B run name
+        if training_args.run_name:
+            os.environ["WANDB_NAME"] = training_args.run_name
 
     # [Modified] Argument validation
     if model_args.use_lora and model_args.use_qlora:
@@ -157,12 +194,12 @@ def main():
             r=model_args.lora_r,
             lora_alpha=model_args.lora_alpha,
             lora_dropout=model_args.lora_dropout,
-            target_modules=model_args.lora_target_modules.split(','),
+            # [Modified] Use the new target_modules argument
+            target_modules=model_args.target_modules.split(','),
             task_type="CAUSAL_LM",
             bias="none"
         )
 
-        # Enable gradient checkpointing on the base model only for standard LoRA
         if model_args.gradient_checkpointing and not model_args.use_qlora:
             model.gradient_checkpointing_enable()
 
@@ -188,17 +225,22 @@ def main():
     data_collator = DataCollatorForVLM(tokenizer=tokenizer)
 
     # 10. Configure Trainer Settings
+    # [Modified] We no longer need to manually set these from model_args
+    # They are already correctly populated in training_args by HfArgumentParser
     training_args.gradient_checkpointing = model_args.gradient_checkpointing
     training_args.bf16 = model_args.bf16
-    training_args.output_dir = model_args.output_dir
     training_args.dataloader_num_workers = model_args.dataloader_num_workers
     training_args.remove_unused_columns = False
-    # training_args.report_to is set via the command line
+
+    training_args.gradient_checkpointing = model_args.gradient_checkpointing
+    training_args.bf16 = model_args.bf16
+    training_args.dataloader_num_workers = model_args.dataloader_num_workers
+    training_args.remove_unused_columns = False
 
     # 11. Initialize Trainer
     trainer = Trainer(
         model=model,
-        args=training_args,
+        args=training_args,  # All args (steps, batch_size, logging, etc.) are in here
         train_dataset=train_dataset,
         data_collator=data_collator,
         tokenizer=tokenizer
