@@ -1,0 +1,41 @@
+{
+  "uid": "piper_press_the_blue_button_ep60@000-000000-000000000001",
+  "task": "press the blue button",
+  "chunk_id": "chunk-000",
+  "episode_id": "episode_000000",
+  "timestamp_ms": 1,
+  "images": {
+    "side": "/data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/frames_1fps/chunk-000/episode_000000/side/frame_000000000001.jpg",
+    "wrist": "/data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/frames_1fps/chunk-000/episode_000000/wrist/frame_000000000001.jpg"
+  },
+  "prev_desc": "No visible depression or illumination on button in both views.",
+  "prev_status": "NOT_DONE",
+  "api_output": {
+    "desc_1": "TABLE view shows blue button unpressed; WRIST view shows gripper nearby",
+    "desc_2": "No visible button depression or illumination in both TABLE and WRIST",
+    "status": "NOT_DONE"
+  },
+  "meta": {
+    "capture": {
+      "fps": 1,
+      "cameras": [
+        "side",
+        "wrist"
+      ]
+    },
+    "source": {
+      "dataset": "piper_press_the_blue_button_ep60",
+      "root": "/data/ghkim/piper_press_the_blue_button_ep60"
+    },
+    "generator": {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "temperature": 0.2,
+      "top_p": 0.9,
+      "max_tokens": 1536,
+      "seed": 1234,
+      "prompt_id": "eval_final",
+      "k": 1
+    }
+  }
+}
