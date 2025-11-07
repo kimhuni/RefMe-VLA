@@ -51,6 +51,7 @@ import logging
 import transformers
 from transformers import (
     AutoModelForCausalLM,
+    Qwen2_5_VLForCausalLM,
     AutoProcessor,
     HfArgumentParser,
     TrainingArguments,
@@ -156,12 +157,23 @@ def main():
 
     # 3. Load Model
     print(f"Loading model: {model_args.model_name_or_path}")
-    model = AutoModelForCausalLM.from_pretrained(
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     model_args.model_name_or_path,
+    #     quantization_config=bnb_config,  # bnb_config is applied only if use_qlora=True
+    #     torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
+    #     attn_implementation="flash_attention_2",
+    #     trust_remote_code=True
+    # )
+    model = Qwen2_5_VLForCausalLM.from_pretrained(
         model_args.model_name_or_path,
-        quantization_config=bnb_config,  # bnb_config is applied only if use_qlora=True
-        torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
+        quantization_config=bnb_config,
+
+        # [추가 수정] 로그에 나온 경고(Warning)도 함께 수정합니다.
+        # `torch_dtype` is deprecated! Use `dtype` instead!
+        dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
+
         attn_implementation="flash_attention_2",
-        trust_remote_code=True
+        trust_remote_code=True  # Qwen 계열은 보통 이게 필요합니다.
     )
 
     # 4. Load Processor (Tokenizer)
