@@ -51,7 +51,7 @@ import logging
 import transformers
 from transformers import (
     AutoModelForCausalLM,
-    Qwen2_5_VLForCausalLM,
+    Qwen2_5_VLForConditionalGeneration,
     AutoProcessor,
     HfArgumentParser,
     TrainingArguments,
@@ -164,7 +164,7 @@ def main():
     #     attn_implementation="flash_attention_2",
     #     trust_remote_code=True
     # )
-    model = Qwen2_5_VLForCausalLM.from_pretrained(
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_args.model_name_or_path,
         quantization_config=bnb_config,
 
@@ -246,7 +246,7 @@ def main():
         args=training_args,  # All args (steps, batch_size, logging, etc.) are in here
         train_dataset=train_dataset,
         data_collator=data_collator,
-        tokenizer=tokenizer
+        #tokenizer=tokenizer
     )
 
     # 12. [Added] Log custom parameters to W&B (if enabled)

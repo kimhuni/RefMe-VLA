@@ -170,9 +170,9 @@ class VlmDataset(Dataset):
         labels[:user_part_len] = -100  # [Requirement] Mask User + Assistant prompt
 
         # 7. [Qwen-VL Special Args] Handle image_grid_thw
-        image_grid_thw = model_inputs.get('image_grid_thw')
-        if image_grid_thw is not None:
-            image_grid_thw = image_grid_thw[0]
+        #image_grid_thw = model_inputs.get('image_grid_thw')
+        #if image_grid_thw is not None:
+        #    image_grid_thw = image_grid_thw[0]
 
         return_dict = {
             "input_ids": input_ids,
@@ -180,8 +180,19 @@ class VlmDataset(Dataset):
             "labels": labels
         }
 
-        if image_grid_thw is not None:
-            return_dict["image_grid_thw"] = image_grid_thw
+        if idx == 0:  # 첫 번째 데이터만 확인
+            print("--- 🐛 DEBUGGING DATA MASKING ---")
+
+            # 마스킹(-100)이 안 된 라벨 토큰만 필터링
+            target_tokens = [l for l in labels.tolist() if l != -100]
+
+            # 타겟 토큰 디코딩
+            decoded_target = self.processor.tokenizer.decode(target_tokens)
+            print(f"Decoded Target (Should be JSON): {decoded_target}")
+
+            # 원본 JSON (비교 대상)
+            original_target = json.dumps(item['api_output'])
+            print(f"Original Target (For comparison): {original_target}")
 
         return return_dict
 
@@ -223,9 +234,9 @@ class DataCollatorForVLM:
         }
 
         # 2. [Qwen-VL Special Args] Pad (torch.cat)
-        if 'image_grid_thw' in features[0]:
-            image_grids = [f['image_grid_thw'] for f in features]
-            # Combine into (num_images_in_batch, 3, grid_H, grid_W)
-            batch['image_grid_thw'] = torch.cat(image_grids, dim=0)
+        #if 'image_grid_thw' in features[0]:
+        #    image_grids = [f['image_grid_thw'] for f in features]
+        #    # Combine into (num_images_in_batch, 3, grid_H, grid_W)
+        #    batch['image_grid_thw'] = torch.cat(image_grids, dim=0)
 
         return batch
