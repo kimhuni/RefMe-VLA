@@ -103,10 +103,9 @@ class VlmDataset(Dataset):
             images_list = [side_image, wrist_image]
         except Exception as e:
             logger.error(f"Error loading images for index {idx}, path: {item['images']}. Error: {e}")
-            # Return empty dict, DataCollator will filter this
             return {}
 
-            # 2. Configure prompt and target [Core Preprocessing Logic]
+        # 2. Configure prompt and target [Core Preprocessing Logic]
         user_prompt_text = make_train_prompt(
             item['task'], item['prev_desc'], item['prev_status']
         )
@@ -124,75 +123,67 @@ class VlmDataset(Dataset):
             },
             {
                 "role": "assistant",
-                "content": target_text
+                "content": target_text  # processor.tokenizer가 \n + target_text + <|im_end|>로 변환
             }
         ]
 
-        # 4. [Loss Masking] Calculate length of the User turn
-        # Create string for User turn + Assistant start prompt
-        user_messages = [messages[0]]
-        user_part_string = self.processor.tokenizer.apply_chat_template(
-            user_messages,
-            tokenize=False,
-            add_generation_prompt=True  # Adds "assistant\n" prompt
-        )
+        # 4. Convert the chat dictionary into a single string
+        try:
+            prompt_string_with_placeholders = self.processor.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
+            )
+        except Exception as e:
+            logger.error(f"Error applying chat template at index {idx}: {e}")
+            logger.error(f"Messages: {messages}")
+            return {}
 
-        # Tokenize to get the actual token length
-        # (Note: add_special_tokens=False to avoid double <bos>)
-        user_part_tokens = self.processor.tokenizer(
-            user_part_string, add_special_tokens=False
-        ).input_ids
-
-        user_part_len = len(user_part_tokens)
-
-        # 5. Apply full template and tokenize (using Processor)
-        # apply_chat_template internally handles <image> tokens
-        prompt_with_images = self.processor.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=False  # Assistant turn is already included
-        )
-
-        # Processor converts text + images into model inputs
+        # 5. Processor converts the *string* + images into model inputs
         model_inputs = self.processor(
-            text=prompt_with_images,
+            text=prompt_string_with_placeholders,
             images=images_list,
             return_tensors="pt",
-            padding=False  # Collator handles padding
+            padding=False
         )
 
         # Remove batch dimension (0)
         input_ids = model_inputs['input_ids'][0]
         attention_mask = model_inputs['attention_mask'][0]
 
-        # 6. [Loss Masking] Create labels and apply mask
+        # 6. [FINAL MASKING LOGIC]
         labels = input_ids.clone()
-        labels[:user_part_len] = -100  # [Requirement] Mask User + Assistant prompt
 
-        # 7. [Qwen-VL Special Args] Handle image_grid_thw
-        #image_grid_thw = model_inputs.get('image_grid_thw')
-        #if image_grid_thw is not None:
-        #    image_grid_thw = image_grid_thw[0]
+        # [FIX] The template adds a newline: 'assistant\n{JSON...}'
+        # We must tokenize exactly what the assistant content will be.
+        assistant_content_str = "\n" + target_text
+
+        target_tokens = self.processor.tokenizer(
+            assistant_content_str, add_special_tokens=False
+        ).input_ids
+
+        # The total length to *keep* (unmask) is:
+        # The length of (\n + JSON) tokens + 1 (for the <|im_end|> token)
+        target_len = len(target_tokens) + 1
+
+        # Mask everything *except* for the last 'target_len' tokens
+        mask_len = len(labels) - target_len
+        labels[:mask_len] = -100
+
+        # [Debugging code] (This is still useful)
+        if idx == 0:
+            print("--- 🐛 DEBUGGING FINAL MASKING ---")
+            target_tokens_debug = [l for l in labels.tolist() if l != -100]
+            decoded_target = self.processor.tokenizer.decode(target_tokens_debug)
+            print(f"Decoded Target (Should be JSON): {decoded_target}")
+            print(f"Original Target (For comparison): {target_text}")
+        # --- [디버깅 코드 끝] ---
 
         return_dict = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels
         }
-
-        if idx == 0:  # 첫 번째 데이터만 확인
-            print("--- 🐛 DEBUGGING DATA MASKING ---")
-
-            # 마스킹(-100)이 안 된 라벨 토큰만 필터링
-            target_tokens = [l for l in labels.tolist() if l != -100]
-
-            # 타겟 토큰 디코딩
-            decoded_target = self.processor.tokenizer.decode(target_tokens)
-            print(f"Decoded Target (Should be JSON): {decoded_target}")
-
-            # 원본 JSON (비교 대상)
-            original_target = json.dumps(item['api_output'])
-            print(f"Original Target (For comparison): {original_target}")
 
         return return_dict
 
