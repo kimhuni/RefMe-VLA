@@ -16,6 +16,13 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="sushi">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/ghkim/codes/RefMe-VLA" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
     </serverData>
   </component>
 </project>

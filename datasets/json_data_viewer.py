@@ -1,8 +1,68 @@
 # viewer_streamlit.py
+
 import json, glob, argparse, time, random
 from pathlib import Path
 import streamlit as st
 import pandas as pd
+import re
+
+# --- robust parsing helpers for malformed JSON strings ---
+def _clean_json_like(s: str) -> str:
+    # normalize common issues: control chars, smart quotes, repeated commas, stray trailing commas
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    # remove most control chars except tab/newline
+    s = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F]", " ", s)
+    # unify smart quotes
+    s = s.replace("“", "\"").replace("”", "\"").replace("’", "'").replace("‘", "'")
+    # collapse repeated commas
+    s = re.sub(r",\s*,+", ", ", s)
+    # remove comma before closing brace/bracket
+    s = re.sub(r",\s*([}\]])", r" \1", s)
+    # collapse excessive whitespace
+    s = re.sub(r"[ \t\f\v]+", " ", s)
+    return s.strip()
+
+def parse_model_output_any(raw: str) -> dict:
+    """
+    Try strict JSON first; if it fails, fall back to regex-based extraction for keys:
+    desc_1, desc_2, status. Returns a dict with missing keys filled as empty strings.
+    """
+    cleaned = _clean_json_like(raw)
+    # 1) strict JSON
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # 2) fallback: regex extraction with DOTALL and lookahead to next key or end
+    out = {"desc_1": "", "desc_2": "", "status": ""}
+    # desc_1: up to ,"desc_2" or ,"status" or }
+    m1 = re.search(r'"desc_1"\s*:\s*"(.*?)"(?=,\s*"(?:desc_2|status)"|\s*})', cleaned, flags=re.DOTALL)
+    if m1:
+        out["desc_1"] = m1.group(1)
+    # desc_2: up to ,"status" or }
+    m2 = re.search(r'"desc_2"\s*:\s*"(.*?)"(?=,\s*"(?:status)"|\s*})', cleaned, flags=re.DOTALL)
+    if m2:
+        out["desc_2"] = m2.group(1)
+    # status: simple capture
+    m3 = re.search(r'"status"\s*:\s*"(.*?)"', cleaned, flags=re.DOTALL)
+    if m3:
+        out["status"] = m3.group(1)
+
+    # final normalization: remove remaining newlines and stray spaces inside values
+    for k in ("desc_1", "desc_2", "status"):
+        v = out.get(k, "")
+        if isinstance(v, str):
+            v = v.replace("\n", " ").replace("\r", " ")
+            v = re.sub(r"\s+", " ", v).strip()
+            # escape any remaining unescaped quotes to make it JSON-safe if needed downstream
+            v = v.replace('\\"', '"')  # un-double-escape first
+            v = v.replace('"', '\\"')
+            # but keep in-memory values unescaped for display
+            v = v.replace('\\"', '"')
+            out[k] = v
+    return out
+
 
 def load_shards(shards_glob):
     rows = []
@@ -24,18 +84,60 @@ def load_shards(shards_glob):
                         "desc_1": o.get("api_output", {}).get("desc_1", ""),
                         "desc_2": o.get("api_output", {}).get("desc_2", ""),
                         "status": o.get("api_output", {}).get("status", ""),
+                        "model_output_raw": o.get("model_output_raw", ""),
                     })
                 except Exception:
                     pass
     return pd.DataFrame(rows)
 
 def show_record(r):
+    raw_str = r.get("model_output_raw")
+    debug_raw = st.session_state.get("debug_raw")
+    # show raw first if requested
+    if debug_raw and isinstance(raw_str, str) and raw_str.strip():
+        st.caption("raw model_output_raw")
+        st.code(raw_str[:500], language="json")
+        try:
+            cleaned_preview = _clean_json_like(raw_str)[:500]
+            st.caption("cleaned (preview)")
+            st.code(cleaned_preview, language="json")
+        except Exception:
+            pass
+
+    # --- handle model_output_raw field (robust) ---
+    if isinstance(raw_str, str) and raw_str.strip():
+        try:
+            model_output = parse_model_output_any(raw_str)
+            r["desc_1"] = model_output.get("desc_1", r.get("desc_1",""))
+            r["desc_2"] = model_output.get("desc_2", r.get("desc_2",""))
+            r["status"] = model_output.get("status", r.get("status",""))
+        except Exception as e:
+            st.warning(f"⚠️ Failed to parse model_output_raw for {r.get('uid')}: {e}")
+            if not r.get("desc_1"):
+                r["desc_1"] = f"[PARSE_ERROR] {raw_str[:200]}"
+            if not r.get("status"):
+                r["status"] = "ERROR"
+
     st.markdown(f"### {r['uid']} — **{r['status']}**")
     c1, c2 = st.columns(2)
+    side_path = r.get("side", "")
+    wrist_path = r.get("wrist", "")
     with c1:
-        st.image(r["side"], caption=f"side | {r['side']}", use_container_width=True)
+        if isinstance(side_path, str) and len(side_path) > 0:
+            try:
+                st.image(side_path, caption=f"side | {side_path}", use_container_width=True)
+            except Exception:
+                st.info("No side image.")
+        else:
+            st.info("No side image.")
     with c2:
-        st.image(r["wrist"], caption=f"wrist | {r['wrist']}", use_container_width=True)
+        if isinstance(wrist_path, str) and len(wrist_path) > 0:
+            try:
+                st.image(wrist_path, caption=f"wrist | {wrist_path}", use_container_width=True)
+            except Exception:
+                st.info("No wrist image.")
+        else:
+            st.info("No wrist image.")
     st.markdown(f"**prev_desc**: {r['prev_desc']} \n **prev_status**: {r['prev_status']}")
     st.markdown(f"**desc_1**: {r['desc_1']}  \n**desc_2**: {r['desc_2']}")
     status = r['status']
@@ -55,16 +157,27 @@ def main():
     parser.add_argument("--port", type=int, default=8501)
     args = parser.parse_args()
 
-    shards_glob = str(args.derived_root  / "shards" / "*.jsonl")
+    shards_glob = str(args.derived_root / "shards" / "*.jsonl")
+
+    st.session_state["debug_raw"] = st.sidebar.checkbox("debug: show raw model_output_raw", value=False)
+
+    matched = sorted(glob.glob(shards_glob))
+    st.sidebar.write(f"📄 matched files: {len(matched)}")
+    if len(matched) == 0:
+        st.warning(f"No records found. Glob pattern matched nothing:\n{shards_glob}")
+    if st.session_state.get("debug_raw", False):
+        for p in matched[:20]:
+            st.sidebar.caption(p)
+
+    df = load_shards(shards_glob)
+    if df.empty:
+        st.warning(f"No records found at: {shards_glob}")
+        return
 
     st.set_page_config(page_title="VLM-B Viewer", layout="wide")
     st.title("VLM-B Evaluation Viewer (side + wrist)")
 
     # 좌측 필터
-    df = load_shards(shards_glob)
-    if df.empty:
-        st.warning(f"No records found at: {shards_glob}")
-        return
 
     col_f1, col_f2, col_f3, col_f4 = st.sidebar.columns(4)
     with col_f1:

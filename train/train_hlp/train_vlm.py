@@ -58,7 +58,7 @@ from transformers import (
     Trainer,
     BitsAndBytesConfig
 )
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 # Local imports
 from dataset_vlm import VlmDataset, DataCollatorForVLM
@@ -203,7 +203,17 @@ def main():
             bias="none"
         )
 
-        if training_args.gradient_checkpointing and not model_args.use_qlora:
+        # QLoRA와 그래디언트 체크포인팅을 함께 사용할 경우,
+        # PEFT의 전용 함수를 사용해야 합니다.
+        if model_args.use_qlora and training_args.gradient_checkpointing:
+            print("Preparing model for K-bit training (gradient checkpointing)...")
+            model = prepare_model_for_kbit_training(
+                model, use_gradient_checkpointing=True
+            )
+
+        # QLoRA가 아닌 *표준* LoRA와 그래디언트 체크포인팅을 사용할 경우
+        elif training_args.gradient_checkpointing and not model_args.use_qlora:
+            print("Enabling gradient checkpointing for standard LoRA...")
             model.gradient_checkpointing_enable()
 
         model = get_peft_model(model, peft_config)
