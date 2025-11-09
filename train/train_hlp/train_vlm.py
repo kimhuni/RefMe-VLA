@@ -248,7 +248,7 @@ def main():
     #training_args.gradient_checkpointing = model_args.gradient_checkpointing
     #training_args.bf16 = model_args.bf16
     #training_args.dataloader_num_workers = model_args.dataloader_num_workers
-    training_args.remove_unused_columns = False
+    #training_args.remove_unused_columns = False
 
     # 11. Initialize Trainer
     trainer = Trainer(

@@ -1,21 +1,31 @@
-# 📦 dataset_vlm.py
+# 📦 dataset_loader.py (V7 - Pre-Caching + All Bug Fixes)
+# '100s/it' 병목 현상을 해결하기 위해 V6의 '사전 캐싱' 아키텍처를 사용합니다.
+# V5에서 수정한 모든 버그(마스킹, image_grid_thw)를 V6 로직에 적용한 최종본입니다.
+# 경고: 훈련 시작 시 모든 데이터를 RAM에 캐시하므로, RAM 사용량이 매우 큽니다.
+
 import json
-import os  # [Added]
-import glob  # [Added]
+import os
+import glob
 import torch
 from torch.utils.data import Dataset
 from transformers import AutoProcessor
 from PIL import Image
 import logging
+from dataclasses import dataclass
+from torch.nn.utils.rnn import pad_sequence
+from tqdm import tqdm  # 진행률 표시
+from typing import List, Dict, Any
 
-# Setup logging (worker-process-safe)
+# 로거 설정
 logger = logging.getLogger(__name__)
+
+
+# (train_vlm.py에서 logging.basicConfig를 호출해야 함)
 
 
 def make_train_prompt(task: str, prev: str, prev_status: str) -> str:
     """
     Generate a concise training prompt for image analysis in robot manipulation.
-    (Function provided in the requirements)
     """
     return (
         "You are an image-analysis expert for robot manipulation.\n"
@@ -29,205 +39,210 @@ def make_train_prompt(task: str, prev: str, prev_status: str) -> str:
     )
 
 
+# ===== 1) Dataset: V6 아키텍처 (사전 캐싱) =====
 class VlmDataset(Dataset):
     """
-    Dataset class implementing the 'v5 architecture'.
-    __init__ is lightweight; __getitem__ handles all preprocessing (image loading, tokenizing, masking).
+    [V7] __init__에서 모든 샘플을 미리 전처리하여 RAM에 보관합니다.
+    __getitem__은 단지 리스트에서 텐서를 꺼내기만 합니다 (매우 빠름).
     """
 
-    # [Modified] __init__ signature changed (jsonl_path -> dataset_dir)
     def __init__(self, dataset_dir: str, model_name_or_path: str):
-        self.model_name_or_path = model_name_or_path
+        self.processor = None
         self.data = []
 
-        # [Modified] Logic to find sharded .jsonl files
-        # User mentioned "{dataset_dir}/shards/chunk-000.json" format.
-        # Use "chunk-*.json*" to find both .jsonl and .json files.
+        # 1. 샤드 파일 검색
         shard_pattern = os.path.join(dataset_dir, "shards", "chunk-*.json*")
-        logger.info(f"Looking for dataset shards at: {shard_pattern}")
-
-        # Use glob to get all matching files (sorted)
         shard_files = sorted(glob.glob(shard_pattern))
-
         if not shard_files:
-            logger.error(f"No dataset shards found at {shard_pattern}. "
-                         f"Please check --dataset_dir path.")
             raise FileNotFoundError(f"No shards found at {shard_pattern}")
 
-        logger.info(f"Found {len(shard_files)} shards. Loading...")
-
-        # Iterate over all shard files and append data
+        # 2. .jsonl 파일의 모든 라인을 우선 RAM에 로드
         for shard_file in shard_files:
             try:
                 with open(shard_file, 'r', encoding='utf-8') as f:
-                    # Assume .jsonl format (one JSON object per line)
                     for line in f:
-                        if line.strip():  # Skip empty lines
+                        if line.strip():
                             self.data.append(json.loads(line))
             except Exception as e:
                 logger.warning(f"Error reading or parsing {shard_file}: {e}")
 
-        logger.info(f"Successfully loaded {len(self.data)} total data points from {len(shard_files)} shards.")
+        logger.info(f"Loaded {len(self.data)} data points. Starting pre-caching...")
 
-        # [v5 Architecture] Initialize processor to None (process-local)
-        self.processor = None
+        # 3. [핵심] 메인 프로세서에서 즉시 'processor'를 로드
+        self.processor = AutoProcessor.from_pretrained(
+            model_name_or_path,
+            trust_remote_code=True,
+            use_fast=True
+        )
+
+        # 4. 모든 샘플을 미리 전처리하여 RAM 리스트에 저장
+        self.processed_samples = []
+        # tqdm을 사용해 캐싱 진행률 표시
+        for i in tqdm(range(len(self.data)), desc="Pre-caching dataset into RAM"):
+            try:
+                # _process_one_sample이 텐서 딕셔너리를 반환
+                self.processed_samples.append(
+                    self._process_one_sample(self.data[i], i)
+                )
+            except Exception as e:
+                logger.error(f"Failed to process sample {i} ({self.data[i].get('uid', 'N/A')}): {e}")
+
+        logger.info(f"Caching complete. {len(self.processed_samples)} samples loaded into RAM.")
+        # 원본 데이터는 메모리에서 해제
+        del self.data
 
     def __len__(self):
-        return len(self.data)
+        return len(self.processed_samples)
 
-    def _initialize_processor(self):
+    def __getitem__(self, i: int):
+        # [핵심] __getitem__은 RAM에 캐시된 딕셔너리를 즉시 반환 (초고속)
+        return self.processed_samples[i]
+
+    # --- 전처리를 위한 헬퍼 함수 ---
+    def _process_one_sample(self, item: dict, idx: int) -> dict:
         """
-        [v5 Architecture] Initializes the processor for each Dataloader worker.
+        [BUG FIXED] V5의 버그 수정 로직을 V6 아키텍처에 적용합니다.
         """
-        logger.info(f"Initializing processor for worker...")
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_name_or_path,
-            trust_remote_code=True,
-            use_fast=True  # [Requirement] Use fast Rust tokenizer
-        )
-        # Set pad token to EOS token if it's not defined (for Collator)
-        if self.processor.tokenizer.pad_token is None:
-            self.processor.tokenizer.pad_token = self.processor.tokenizer.eos_token
 
-    def __getitem__(self, idx):
-        # [v5 Architecture] Create processor if it doesn't exist for this worker
-        if self.processor is None:
-            self._initialize_processor()
-
-        item = self.data[idx]
-
-        # 1. Load images
+        # --- 1. 이미지 로드 (PIL) ---
+        # (V6) 캐싱을 위해 여기서 이미지를 로드하고 텐서로 변환합니다.
         try:
-            side_image = Image.open(item['images']['side']).convert('RGB')
-            wrist_image = Image.open(item['images']['wrist']).convert('RGB')
-            images_list = [side_image, wrist_image]
+            images_list = [
+                Image.open(item['images']['side']).convert('RGB'),
+                Image.open(item['images']['wrist']).convert('RGB')
+            ]
         except Exception as e:
-            logger.error(f"Error loading images for index {idx}, path: {item['images']}. Error: {e}")
-            return {}
+            logger.error(f"Error loading images for {item.get('uid', idx)}: {e}")
+            raise e  # 캐싱 중단
 
-        # 2. Configure prompt and target [Core Preprocessing Logic]
+        # --- 2. 텍스트 생성 ---
         user_prompt_text = make_train_prompt(
-            item['task'], item['prev_desc'], item['prev_status']
+            item['task'], item.get('prev_desc', ''), item.get('prev_status', 'NOT_DONE')
         )
         target_text = json.dumps(item['api_output'])
 
-        # 3. VLM Input Template (Qwen-VL Chat)
+        # --- 3. 채팅 템플릿 구성 ---
         messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},  # side image
-                    {"type": "image"},  # wrist image
-                    {"type": "text", "text": user_prompt_text}
-                ]
-            },
-            {
-                "role": "assistant",
-                "content": target_text  # processor.tokenizer가 \n + target_text + <|im_end|>로 변환
-            }
+            {"role": "user",
+             "content": [{"type": "image"}, {"type": "image"}, {"type": "text", "text": user_prompt_text}]},
+            {"role": "assistant", "content": target_text}
         ]
 
-        # 4. Convert the chat dictionary into a single string
+        # --- 4. 토큰화 (String 변환 -> Processor 호출) ---
+        # (AttributeError: 'dict' object has no attribute 'replace' 버그 수정)
         try:
-            prompt_string_with_placeholders = self.processor.tokenizer.apply_chat_template(
+            prompt_string = self.processor.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=False
+                add_generation_prompt=False  # 이미 assistant 턴 포함
             )
         except Exception as e:
-            logger.error(f"Error applying chat template at index {idx}: {e}")
-            logger.error(f"Messages: {messages}")
-            return {}
+            logger.error(f"Error applying chat template for {item.get('uid', idx)}: {e}")
+            raise e
 
-        # 5. Processor converts the *string* + images into model inputs
         model_inputs = self.processor(
-            text=prompt_string_with_placeholders,
+            text=prompt_string,  # 딕셔너리가 아닌 문자열 전달
             images=images_list,
             return_tensors="pt",
             padding=False
         )
 
-        # Remove batch dimension (0)
-        input_ids = model_inputs['input_ids'][0]
-        attention_mask = model_inputs['attention_mask'][0]
-
-        # 6. [FINAL MASKING LOGIC]
+        # (V6) RAM 캐싱을 위해 텐서에서 배치 차원(0)을 제거합니다.
+        input_ids = model_inputs['input_ids'].squeeze(0)
         labels = input_ids.clone()
+        attention_mask = model_inputs['attention_mask'].squeeze(0)
+        # (V6) pixel_values도 캐시합니다. (OOM 위험!)
+        pixel_values = model_inputs['pixel_values'].squeeze(0)
 
-        # [FIX] The template adds a newline: 'assistant\n{JSON...}'
-        # We must tokenize exactly what the assistant content will be.
+        # --- 5. [FINAL MASKING LOGIC] ---
+        # (loss=6, `,,` 출력 버그 수정)
         assistant_content_str = "\n" + target_text
-
         target_tokens = self.processor.tokenizer(
             assistant_content_str, add_special_tokens=False
         ).input_ids
 
-        # The total length to *keep* (unmask) is:
-        # The length of (\n + JSON) tokens + 1 (for the <|im_end|> token)
-        target_len = len(target_tokens) + 1
-
-        # Mask everything *except* for the last 'target_len' tokens
+        target_len = len(target_tokens) + 1  # +1 for <|im_end|>
         mask_len = len(labels) - target_len
-        labels[:mask_len] = -100
 
-        # [Debugging code] (This is still useful)
-        if idx == 0:
-            print("--- 🐛 DEBUGGING FINAL MASKING ---")
-            target_tokens_debug = [l for l in labels.tolist() if l != -100]
-            decoded_target = self.processor.tokenizer.decode(target_tokens_debug)
-            print(f"Decoded Target (Should be JSON): {decoded_target}")
-            print(f"Original Target (For comparison): {target_text}")
-        # --- [디버깅 코드 끝] ---
+        if mask_len < 0:
+            logger.warning(
+                f"Masking error for {item.get('uid', idx)}: Target length ({target_len}) is longer than total input ({len(labels)}). Not masking.")
+        else:
+            labels[:mask_len] = -100
 
-        return_dict = {
+        # 6. [BUG FIX] `image_grid_thw` "올바르게" 추가
+
+        # model_inputs에서 텐서를 가져옴 (V6 로직)
+        grid_thw = model_inputs.get("image_grid_thw")
+        if grid_thw is not None:
+            grid_thw = grid_thw.squeeze(0)  # 0-dim 에러 방지
+
+        return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "labels": labels
+            "labels": labels,
+            "pixel_values": pixel_values,  # RAM에 이미지 텐서 캐시
+            "image_grid_thw": grid_thw,  # [추가] (None일 수도 있음)
         }
 
-        return return_dict
 
-
+# ===== 2) Collator: 텐서를 받아 패딩만 수행 (V6와 거의 동일) =====
+@dataclass
 class DataCollatorForVLM:
     """
-    [v5 Architecture] Data collator that only performs padding on tensorized samples.
+    VlmDataset에서 이미 RAM에 캐시된 텐서 딕셔너리를 받아 패딩만 수행합니다.
     """
+    tokenizer: AutoProcessor
 
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
 
-    def __call__(self, features):
-        # Filter out failed samples (which returned {} in __getitem__)
         features = [f for f in features if f]
         if not features:
+            logger.warning("Data collator received an empty batch.")
             return {}
 
-        # 1. Pad text-related tensors
-        input_ids = [f['input_ids'] for f in features]
-        attention_mask = [f['attention_mask'] for f in features]
-        labels = [f['labels'] for f in features]
+        pad_token_id = self.tokenizer.pad_token_id
 
-        # Right-padding
-        input_ids = torch.nn.utils.rnn.pad_sequence(
-            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+        # 1. 텍스트 관련 텐서 패딩
+        input_ids = pad_sequence(
+            [f["input_ids"] for f in features], batch_first=True, padding_value=pad_token_id
         )
-        attention_mask = torch.nn.utils.rnn.pad_sequence(
-            attention_mask, batch_first=True, padding_value=0
+        labels = pad_sequence(
+            [f["labels"] for f in features], batch_first=True, padding_value=-100
         )
-        labels = torch.nn.utils.rnn.pad_sequence(
-            labels, batch_first=True, padding_value=-100  # Pad with loss mask value
+        attention_mask = pad_sequence(
+            [f["attention_mask"] for f in features], batch_first=True, padding_value=0
         )
+
+        # 2. 이미지 텐서 스택
+        try:
+            pixel_values = torch.stack([f["pixel_values"] for f in features])
+        except Exception as e:
+            shapes = [f["pixel_values"].shape for f in features]
+            logger.error(f"Failed to stack pixel_values. Shapes: {shapes}. Error: {e}")
+            # V6는 pixel_values를 캐시하므로, 여기서 크기가 다르면 치명적 에러임
+            raise e
 
         batch = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "labels": labels
+            "labels": labels,
+            "pixel_values": pixel_values,  # [V6] pixel_values도 전달
         }
 
-        # 2. [Qwen-VL Special Args] Pad (torch.cat)
-        #if 'image_grid_thw' in features[0]:
-        #    image_grids = [f['image_grid_thw'] for f in features]
-        #    # Combine into (num_images_in_batch, 3, grid_H, grid_W)
-        #    batch['image_grid_thw'] = torch.cat(image_grids, dim=0)
+        if features[0]["image_grid_thw"] is not None:
+            try:
+                concatenated_grid_thw = torch.cat([f["image_grid_thw"] for f in features], dim=0)
+                batch["image_grid_thw"] = concatenated_grid_thw
+            except Exception as e:
+                shapes = [f["image_grid_thw"].shape for f in features if f["image_grid_thw"] is not None]
+                logger.error(f"Failed to concatenate image_grid_thw. Shapes: {shapes}. Error: {e}")
+                # 이 경우, None으로 두어 모델이 처리하도록 함
+                batch["image_grid_thw"] = None
+
+        else:
+            batch["image_grid_thw"] = None  # 명시적으로 None 전달
+
+        # --- [BUG FIX] `image_grid_thw` 제거 ---
 
         return batch
