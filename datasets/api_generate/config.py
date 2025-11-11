@@ -214,6 +214,42 @@ def _prompt_final(task: str, prev: str, prev_status: str) -> str:
         "{\"desc_1\":\"...\",\"desc_2\":\"...\",\"status\":\"DONE|NOT_DONE|UNCERTAIN\"}"
     )
 
+def _prompt_v2_partially_done(task: str, prev: str, prev_status: str) -> str:
+    return (
+        "SYSTEM:\n"
+        "- Output ONE-LINE JSON only: {\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}\n"
+        "- MUST preserve prior info: If current evidence is insufficient or view is unclear, "
+        "copy both prev_reasoning_status and prev_status into status_reasoning and status.\n"
+        "- Sticky DONE: If prev_status is DONE, keep status as DONE unless explicit visual reversal is clearly visible.\n"
+        "\n"
+        "USER:\n"
+        "You are an image-analysis expert for robotic manipulation.\n"
+        "Inputs:\n"
+        f"- TASK: {task}\n"
+        f"- PREV_REASONING_STATUS: {prev}\n"
+        f"- PREV_STATUS: {prev_status}\n"
+        "- IMAGES: [TABLE]=global scene; [WRIST]=close-up of gripper/contact.\n"
+        "\n"
+        "Write exactly TWO sentences:\n"
+        "1) desc = concise, visible scene description now; mention TABLE/WRIST when relevant; no speculation.\n"
+        "2) status_reasoning = brief decision rationale: cite current visible evidence; "
+        "if visibility is low/unchanged, copy PREV_REASONING_STATUS and keep PREV_STATUS.\n"
+        "\n"
+        "Status rules (DONE/NOT_DONE/PARTIALLY_DONE):\n"
+        "- DONE: all subtasks visibly completed in correct order.\n"
+        "- PARTIALLY_DONE: ≥1 subtask completed but not all; briefly indicate progress (e.g., 'red pressed; blue pending').\n"
+        "- NOT_DONE: no subtask completion is verified by current evidence.\n"
+        "- Order-sensitive tasks (e.g., 'press red→blue→green'): status must reflect ordered progress.\n"
+        "\n"
+        "Constraints:\n"
+        "- desc/status_reasoning each 8–16 words, non-empty; avoid 'N/A', 'None', null.\n"
+        "- Use visible cues only (contact, compression, release, alignment, illumination, motion halt).\n"
+        "- If uncertain view or minimal change, copy prior reasoning/status as instructed above.\n"
+        "\n"
+        "OUTPUT JSON ONLY on one line:\n"
+        "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
+    )
+
 PROMPTS = {
     "B_eval_v3": _prompt_B_eval_v3,
     "B_eval_compact": _prompt_B_eval_compact,
@@ -225,6 +261,7 @@ PROMPTS = {
     "eval_1031_short": _prompt_eval_short,
     "eval_1031_mix": _prompt_eval_mix,
     "eval_final": _prompt_final,
+    "eval_v2_partially_done": _prompt_v2_partially_done,
 }
 
 ########################################################################################################################

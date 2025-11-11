@@ -3,10 +3,17 @@
 """
 CUDA_VISIBLE_DEVICES=0 python evaluate/eval_HLP.py \
     --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
-    --adapter_path /result/ghkim/HLP_qwen_2.5_7b_LoRA_press_the_blue_button_ep60/checkpoint-500 \
+    --adapter_path /result/ghkim/HLP_qwen_2.5_7b_LoRA_r16_press_the_blue_button_ep60_1109_RAM_test/checkpoint-2000 \
     --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-000.jsonl \
-    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen/shards/chunk_000_evaluation.jsonl
+    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_000_evaluation.jsonl \
+    --is_qlora True
 
+CUDA_VISIBLE_DEVICES=2 python evaluate/eval_HLP.py \
+    --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
+    --adapter_path /result/ghkim/HLP_qwen_2.5_7b_LoRA_r16_press_the_blue_button_ep60_1109_RAM_test/checkpoint-2000 \
+    --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-000.jsonl \
+    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_000_evaluation.jsonl \
+    --is_qlora False
 
 """
 
@@ -175,20 +182,59 @@ def run_evaluation(
                 generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
             )[0]
 
-            # --- 6. 결과 저장 ---
+            # --- 6. 결과 저장 (이미지 경로/메타 포함) ---
+            uid = data.get("uid", "unknown")
+            task = data.get("task", "")
+            chunk_id = data.get("chunk_id", "")
+            episode_id = data.get("episode_id", "")
+            timestamp_ms = data.get("timestamp_ms", None)
+
             results.append({
-                "uid": data.get("uid", "unknown"),
+                "uid": uid,
+                "task": task,
+                "chunk_id": chunk_id,
+                "episode_id": episode_id,
+                "timestamp_ms": timestamp_ms,
+                "images": {
+                    "side": side_img_path,
+                    "wrist": wrist_img_path
+                },
                 "model_output_raw": output_text,
                 "gt_output": ground_truth_output,
-                "prompt": user_prompt_text  # 디버깅용
+                "prompt": user_prompt_text  # 디버깅용 (원치 않으면 제거해도 됨)
             })
 
         except Exception as e:
             print(f"Error processing line (uid: {data.get('uid', 'N/A')}): {e}")
+            # 실패 케이스도 동일한 스키마로 기록 (가능한 한 메타/이미지 포함)
+            try:
+                uid = data.get("uid", "N/A")
+                task = data.get("task", "")
+                chunk_id = data.get("chunk_id", "")
+                episode_id = data.get("episode_id", "")
+                timestamp_ms = data.get("timestamp_ms", None)
+                side_img_path = data.get("images", {}).get("side", None)
+                wrist_img_path = data.get("images", {}).get("wrist", None)
+                gt_out = data.get("api_output", {})
+            except Exception:
+                uid = "N/A"
+                task = chunk_id = episode_id = ""
+                timestamp_ms = None
+                side_img_path = wrist_img_path = None
+                gt_out = {}
+
             results.append({
-                "uid": data.get("uid", "N/A"),
+                "uid": uid,
+                "task": task,
+                "chunk_id": chunk_id,
+                "episode_id": episode_id,
+                "timestamp_ms": timestamp_ms,
+                "images": {
+                    "side": side_img_path,
+                    "wrist": wrist_img_path
+                },
                 "model_output_raw": f"ERROR: {str(e)}",
-                "ground_truth_output": data.get('api_output'),
+                "gt_output": gt_out
             })
 
     # --- 7. 최종 결과를 별도 jsonl 파일로 저장 ---
@@ -220,7 +266,7 @@ if __name__ == "__main__":
                         help="Path to save the evaluation results")
 
     # [추가] 훈련 방식에 따라 설정
-    parser.add_argument("--is_qlora", action="store_true", default=False,
+    parser.add_argument("--is_qlora", type=bool, default=False,
                         help="Set this if you trained with *standard* LoRA (not QLoRA)")
 
     args = parser.parse_args()

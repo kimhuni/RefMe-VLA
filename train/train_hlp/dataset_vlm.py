@@ -155,20 +155,28 @@ class VlmDataset(Dataset):
         pixel_values = model_inputs['pixel_values'].squeeze(0)
 
         # --- 5. [FINAL MASKING LOGIC] ---
-        # (loss=6, `,,` 출력 버그 수정)
-        assistant_content_str = "\n" + target_text
-        target_tokens = self.processor.tokenizer(
-            assistant_content_str, add_special_tokens=False
-        ).input_ids
+        target_tokens_ids = self.processor.tokenizer(target_text, add_special_tokens=False).input_ids
 
-        target_len = len(target_tokens) + 1  # +1 for <|im_end|>
-        mask_len = len(labels) - target_len
+        # (2) input_ids를 리스트로 변환 (검색용)
+        full_ids_list = input_ids.tolist()
 
-        if mask_len < 0:
-            logger.warning(
-                f"Masking error for {item.get('uid', idx)}: Target length ({target_len}) is longer than total input ({len(labels)}). Not masking.")
+        # (3) input_ids *끝*에서부터 *순수 JSON* 시퀀스를 검색합니다.
+        start_index = -1
+        # (단순하지만 확실한 역방향 검색)
+        for i in range(len(full_ids_list) - len(target_tokens_ids), -1, -1):
+            if full_ids_list[i: i + len(target_tokens_ids)] == target_tokens_ids:
+                start_index = i
+                break  # 찾았으면 중단
+
+        if start_index != -1:
+            # (4) JSON이 시작하는 지점(start_index) *앞*을 모두 -100으로 마스킹
+            labels[:start_index] = -100
         else:
-            labels[:mask_len] = -100
+            # (5) [치명적] 정답 JSON을 input_ids에서 찾지 못함.
+            #     이 샘플은 훈련하면 안 됨. (loss=0, garbage output의 원인)
+            logger.error(
+                f"CRITICAL MASKING ERROR: Target JSON not found in input_ids for {item.get('uid', idx)}. Masking all labels.")
+            labels[:] = -100  # 이 샘플 전체를 마스킹
 
         # 6. [BUG FIX] `image_grid_thw` "올바르게" 추가
 

@@ -107,7 +107,7 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                         images=[("side", str(side_img)), ("wrist", str(wrist_img))],
                     )
                     resp = api.call(req)
-                    if resp.status not in {"DONE", "NOT_DONE", "UNCERTAIN"}:
+                    if resp.status not in {"DONE", "NOT_DONE", "PARTIALLY_DONE"}:
                         raise ValueError(f"invalid status: {resp.status}")
 
                     # Sticky DONE guard
@@ -131,8 +131,8 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                         "prev_desc": prev_desc,
                         "prev_status": prev_status,
                         "api_output": {
-                            "desc_1": resp.desc_1,
-                            "desc_2": resp.desc_2,
+                            "desc_1": resp.desc,
+                            "desc_2": resp.status_reasoning,
                             "status": resp.status,
                         },
                         "meta": {

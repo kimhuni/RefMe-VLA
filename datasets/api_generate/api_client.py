@@ -29,6 +29,8 @@ class ApiResponse:
     desc_1: str
     desc_2: str
     status: str  # DONE | NOT_DONE | UNCERTAIN
+    desc: str
+    status_reasoning: str
 
 
 # =========================
