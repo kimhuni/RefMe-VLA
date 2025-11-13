@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-STATUS_SET = {"DONE", "NOT_DONE", "PARTIALLY_DONE"}
+STATUS_SET = {"DONE", "NOT_DONE", "UNCERTAIN"}
 ######## ---- Prompt registry -------- Prompt registry -------- Prompt registry -------- Prompt registry ----###########
 # 키: prompt_id, 값: 포맷 함수(task:str, prev:str) -> str
 
@@ -218,14 +218,15 @@ def _prompt_v2_partially_done(task: str, prev: str, prev_status: str) -> str:
     return (
         "SYSTEM:\n"
         "- Output ONE-LINE JSON only: {\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}\n"
-        "- When visibility is low; Keep PREV_STATUS unless new evidence appears; For status_reasoning, you MAY reuse PREV_REASONING_STATUS, \n"
+        "- MUST preserve prior info: If current evidence is insufficient or view is unclear, "
+        "copy both prev_reasoning_status and prev_status into status_reasoning and status.\n"
         "- Sticky DONE: If prev_status is DONE, keep status as DONE unless explicit visual reversal is clearly visible.\n"
         "\n"
         "USER:\n"
         "You are an image-analysis expert for robotic manipulation.\n"
         "Inputs:\n"
         f"- TASK: {task}\n"
-        f"- PREV_STATUS_REASONING: {prev}\n"
+        f"- PREV_REASONING_STATUS: {prev}\n"
         f"- PREV_STATUS: {prev_status}\n"
         "- IMAGES: [TABLE]=global scene; [WRIST]=close-up of gripper/contact.\n"
         "\n"
@@ -236,95 +237,16 @@ def _prompt_v2_partially_done(task: str, prev: str, prev_status: str) -> str:
         "\n"
         "Status rules (DONE/NOT_DONE/PARTIALLY_DONE):\n"
         "- DONE: all subtasks visibly completed in correct order.\n"
-        "- PARTIALLY_DONE: ≥1 subtask completed but not all; precisely indicate progress (e.g., 'one press done; attempting second press','red pressed; blue pending').\n"
+        "- PARTIALLY_DONE: ≥1 subtask completed but not all; briefly indicate progress (e.g., 'red pressed; blue pending').\n"
         "- NOT_DONE: no subtask completion is verified by current evidence.\n"
         "- Order-sensitive tasks (e.g., 'press red→blue→green'): status must reflect ordered progress.\n"
         "\n"
         "Constraints:\n"
         "- desc/status_reasoning each 8–16 words, non-empty; avoid 'N/A', 'None', null.\n"
-        "- Use visible cues only (illumination, contact, alignment, motion halt).\n"
+        "- Use visible cues only (contact, compression, release, alignment, illumination, motion halt).\n"
         "- If uncertain view or minimal change, copy prior reasoning/status as instructed above.\n"
         "\n"
         "OUTPUT JSON ONLY on one line:\n"
-        "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
-    )
-
-def _prompt_v3_partially_done(task: str, prev: str, prev_status: str) -> str:
-    return (
-        "SYSTEM:\n"
-        "- Output ONE-LINE JSON only: {\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}\n"
-        "- Do NOT blindly copy previous reasoning. Copy PREV_STATUS_REASONING only when the image is unusable "
-        "(e.g., robot completely out of view, strong blur, heavy occlusion).\n"
-        "- Whenever the gripper pose or contact state changes compared to PREV_STATUS_REASONING, "
-        "you MUST update status_reasoning to describe the new attempt or progress, even if status stays the same.\n"
-        "- Sticky DONE: If PREV_STATUS is DONE, keep status as DONE unless explicit visual reversal is clearly visible.\n"
-        "\n"
-        "USER:\n"
-        "You are an image-analysis expert for robotic manipulation.\n"
-        "Inputs:\n"
-        f"- TASK: {task}\n"
-        f"- PREV_STATUS_REASONING: {prev}\n"
-        f"- PREV_STATUS: {prev_status}\n"
-        "- IMAGES: [TABLE]=global scene; [WRIST]=close-up of gripper/contact.\n"
-        "\n"
-        "Write exactly TWO sentences:\n"
-        "1) desc = concise, visible scene description now; mention TABLE/WRIST when relevant; no speculation.\n"
-        "2) status_reasoning = brief decision rationale that updates progress: "
-        "if a new press is being attempted or completed, explicitly say so "
-        "(e.g., 'one press done; preparing second press', 'second press completed; two presses total'). "
-        "Only if the view is unusable (as defined in SYSTEM) may you copy PREV_STATUS_REASONING.\n"
-        "\n"
-        "Status rules (DONE/NOT_DONE/PARTIALLY_DONE):\n"
-        "- DONE: all subtasks visibly completed in correct order.\n"
-        "- PARTIALLY_DONE: ≥1 subtask completed but not all; precisely indicate progress "
-        "(e.g., 'one press done; attempting second press', 'two presses completed; two remaining').\n"
-        "- NOT_DONE: no subtask completion is verified by current evidence.\n"
-        "- Order-sensitive tasks (e.g., 'press red→blue→green' or 'press the button 4 times'): "
-        "status and status_reasoning must reflect ordered progress (which step or which press you are on).\n"
-        "\n"
-        "Constraints:\n"
-        "- desc/status_reasoning each 8–16 words, non-empty; avoid 'N/A', 'None', null.\n"
-        "- Use visible cues only (illumination, contact, release, alignment, motion halt).\n"
-        "- If the view is severely occluded/blurred or the robot is outside the frame, "
-        "you may copy PREV_STATUS_REASONING and keep PREV_STATUS.\n"
-        "\n"
-        "OUTPUT JSON ONLY on one line:\n"
-        "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
-    ) # too strict; doesn't change to DONE
-
-def _prompt_v4_partially_done(task: str, prev: str, prev_status: str) -> str:
-    return (
-        "SYSTEM:\n"
-        "- Output ONE-LINE JSON only: {\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}\n"
-        "- If gripper pose/contact changes compared to PREV_STATUS_REASONING, update status_reasoning even if status stays the same.\n"
-        "- Sticky DONE: If PREV_STATUS is DONE, keep DONE unless explicit reversal is visible.\n"
-        "- Completion evidence does NOT require large deformation. Small/partial changes or sustained contact CAN count as completion.\n"
-        "- If illumination/deformation is unclear due to camera limits, treat stable intentional contact as valid completion.\n"
-        "\n"
-        "USER:\n"
-        "Inputs:\n"
-        f"- TASK: {task}\n"
-        f"- PREV_STATUS_REASONING: {prev}\n"
-        f"- PREV_STATUS: {prev_status}\n"
-        "- IMAGES: TABLE = global scene, WRIST = close-up.\n"
-        "\n"
-        "Write TWO sentences:\n"
-        "1) desc = visible scene description (8–16 words).\n"
-        "2) status_reasoning = updated progress relying on scene description and PREV_STATUS_REASONING; specify attempts/completions."
-        "previous reasoning details need for distinguishing DONE HAS to be kept in the output"
-        "(e.g., 'one press done; preparing second press', 'second press completed; two presses total'). "
-        "\n"
-        "Status rules:\n"
-        "- DONE: all subtasks completed in order.\n"
-        "- PARTIALLY_DONE: ≥1 subtask done but not all; must track ordered progress.\n"
-        "- NOT_DONE: no verified completion.\n"
-        "\n"
-        "Constraints:\n"
-        "- No speculation. Use TABLE/WRIST cues.\n"
-        "- Use visible cues (contact, alignment, motion halt, partial displacement).\n"
-        "- If scene unusable → KEEP previous reasoning/status.\n"
-        "\n"
-        "OUTPUT JSON ONLY:\n"
         "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
     )
 
@@ -340,8 +262,6 @@ PROMPTS = {
     "eval_1031_mix": _prompt_eval_mix,
     "eval_final": _prompt_final,
     "eval_v2_partially_done": _prompt_v2_partially_done,
-    "eval_v3_partially_done": _prompt_v3_partially_done,
-    "eval_v4_partially_done": _prompt_v4_partially_done,
 }
 
 ########################################################################################################################
