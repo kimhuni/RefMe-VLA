@@ -111,12 +111,12 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                         raise ValueError(f"invalid status: {resp.status}")
 
                     # Sticky DONE guard
-                    # if prev_status == "DONE":
-                    #     resp.status = "DONE"
-                    #     # 선택: desc_2에 유지 근거 한 줄 고정
-                    #     if not resp.desc_2.strip():
-                    #         resp.desc_2 = "Previous frame DONE; task remains completed with no reversal visible."
-                    # print("current episode : ", epi_idx)
+                    if prev_status == "DONE":
+                        resp.status = "DONE"
+                        # 선택: desc_2에 유지 근거 한 줄 고정
+                        if not resp.desc_2.strip():
+                            resp.desc_2 = "Previous frame DONE; task remains completed with no reversal visible."
+                    print("current episode : ", epi_idx)
 
                     record = {
                         "uid": uid,
@@ -156,7 +156,7 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
 
                     # prev_desc 갱신 (160자 캡)
                     # prev_desc = (resp.desc_2 + ": " + resp.status).strip()
-                    prev_desc = resp.desc_2
+                    prev_desc = resp.status_reasoning
                     prev_status = resp.status
                     if len(prev_desc) > cfg.prev_desc_max_chars:
                         prev_desc = prev_desc[: cfg.prev_desc_max_chars - 3] + "..."

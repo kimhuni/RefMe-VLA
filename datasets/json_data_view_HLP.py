@@ -133,8 +133,11 @@ def load_rows_from_path(path_pattern: str) -> pd.DataFrame:
                     o = json.loads(line)
                 except Exception:
                     continue
+                imgs = o.get("images", {}) or {}
                 rows.append({
                     "uid": o.get("uid", ""),
+                    "side_path": imgs.get("side", ""),
+                    "wrist_path": imgs.get("wrist", ""),
                     "model_output_raw": o.get("model_output_raw", ""),
                     "gt_desc_1": o.get("gt_output", {}).get("desc_1", ""),
                     "gt_desc_2": o.get("gt_output", {}).get("desc_2", ""),
@@ -147,8 +150,30 @@ def load_rows_from_path(path_pattern: str) -> pd.DataFrame:
 def render_card(r: pd.Series, show_raw: bool, show_clean_preview: bool):
     uid = r.get("uid", "")
     raw = r.get("model_output_raw", "")
+    side_path = r.get("side_path", "")
+    wrist_path = r.get("wrist_path", "")
 
     st.markdown(f"### {uid}")
+    # top row: images (side / wrist)
+    img_cols = st.columns(2)
+    with img_cols[0]:
+        st.caption("SIDE")
+        if isinstance(side_path, str) and side_path:
+            try:
+                st.image(side_path, use_container_width=True)
+            except Exception as e:
+                st.info(f"No side image ({e})")
+        else:
+            st.info("No side image")
+    with img_cols[1]:
+        st.caption("WRIST")
+        if isinstance(wrist_path, str) and wrist_path:
+            try:
+                st.image(wrist_path, use_container_width=True)
+            except Exception as e:
+                st.info(f"No wrist image ({e})")
+        else:
+            st.info("No wrist image")
 
     col1, col2 = st.columns(2)
 
@@ -183,7 +208,29 @@ def render_card(r: pd.Series, show_raw: bool, show_clean_preview: bool):
 def render_pair_card(r: pd.Series, show_raw: bool, show_clean_preview: bool):
     uid = r.get("uid", "")
     raw = r.get("model_output_raw", "")
+    side_path = r.get("side_path", "")
+    wrist_path = r.get("wrist_path", "")
     st.markdown(f"### {uid}")
+    # optional top row: images (side / wrist)
+    img_cols = st.columns(2)
+    with img_cols[0]:
+        st.caption("SIDE")
+        if isinstance(side_path, str) and side_path:
+            try:
+                st.image(side_path, use_container_width=True)
+            except Exception as e:
+                st.info(f"No side image ({e})")
+        else:
+            st.info("No side image")
+    with img_cols[1]:
+        st.caption("WRIST")
+        if isinstance(wrist_path, str) and wrist_path:
+            try:
+                st.image(wrist_path, use_container_width=True)
+            except Exception as e:
+                st.info(f"No wrist image ({e})")
+        else:
+            st.info("No wrist image")
 
     # --- top: parsed vs GT side-by-side ---
     left, right = st.columns(2)

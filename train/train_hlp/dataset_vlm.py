@@ -101,11 +101,11 @@ class VlmDataset(Dataset):
     # --- 전처리를 위한 헬퍼 함수 ---
     def _process_one_sample(self, item: dict, idx: int) -> dict:
         """
-        [BUG FIXED] V5의 버그 수정 로직을 V6 아키텍처에 적용합니다.
+        [THE REAL FINAL MASKING LOGIC]
+        "길이 추측" (+1) 대신 "내용 검색"을 사용하여 마스킹 버그를 수정합니다.
         """
 
         # --- 1. 이미지 로드 (PIL) ---
-        # (V6) 캐싱을 위해 여기서 이미지를 로드하고 텐서로 변환합니다.
         try:
             images_list = [
                 Image.open(item['images']['side']).convert('RGB'),
@@ -113,13 +113,13 @@ class VlmDataset(Dataset):
             ]
         except Exception as e:
             logger.error(f"Error loading images for {item.get('uid', idx)}: {e}")
-            raise e  # 캐싱 중단
+            raise e
 
         # --- 2. 텍스트 생성 ---
         user_prompt_text = make_train_prompt(
             item['task'], item.get('prev_desc', ''), item.get('prev_status', 'NOT_DONE')
         )
-        target_text = json.dumps(item['api_output'])
+        target_text = json.dumps(item['api_output'])  # 이것이 "순수 JSON"
 
         # --- 3. 채팅 템플릿 구성 ---
         messages = [
@@ -129,32 +129,31 @@ class VlmDataset(Dataset):
         ]
 
         # --- 4. 토큰화 (String 변환 -> Processor 호출) ---
-        # (AttributeError: 'dict' object has no attribute 'replace' 버그 수정)
         try:
             prompt_string = self.processor.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=False  # 이미 assistant 턴 포함
+                add_generation_prompt=False
             )
         except Exception as e:
             logger.error(f"Error applying chat template for {item.get('uid', idx)}: {e}")
             raise e
 
         model_inputs = self.processor(
-            text=prompt_string,  # 딕셔너리가 아닌 문자열 전달
+            text=prompt_string,
             images=images_list,
             return_tensors="pt",
             padding=False
         )
 
-        # (V6) RAM 캐싱을 위해 텐서에서 배치 차원(0)을 제거합니다.
         input_ids = model_inputs['input_ids'].squeeze(0)
         labels = input_ids.clone()
         attention_mask = model_inputs['attention_mask'].squeeze(0)
-        # (V6) pixel_values도 캐시합니다. (OOM 위험!)
         pixel_values = model_inputs['pixel_values'].squeeze(0)
 
-        # --- 5. [FINAL MASKING LOGIC] ---
+        # --- 5. [수정됨] "내용 검색" 기반 마스킹 ---
+
+        # (1) 우리가 예측해야 할 *순수 JSON* 토큰을 가져옵니다.
         target_tokens_ids = self.processor.tokenizer(target_text, add_special_tokens=False).input_ids
 
         # (2) input_ids를 리스트로 변환 (검색용)
@@ -178,19 +177,17 @@ class VlmDataset(Dataset):
                 f"CRITICAL MASKING ERROR: Target JSON not found in input_ids for {item.get('uid', idx)}. Masking all labels.")
             labels[:] = -100  # 이 샘플 전체를 마스킹
 
-        # 6. [BUG FIX] `image_grid_thw` "올바르게" 추가
-
-        # model_inputs에서 텐서를 가져옴 (V6 로직)
+        # --- 6. `image_grid_thw` 복원 ---
         grid_thw = model_inputs.get("image_grid_thw")
         if grid_thw is not None:
-            grid_thw = grid_thw.squeeze(0)  # 0-dim 에러 방지
+            grid_thw = grid_thw.squeeze(0)
 
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
-            "pixel_values": pixel_values,  # RAM에 이미지 텐서 캐시
-            "image_grid_thw": grid_thw,  # [추가] (None일 수도 있음)
+            "pixel_values": pixel_values,
+            "image_grid_thw": grid_thw,  # [복원]
         }
 
 
