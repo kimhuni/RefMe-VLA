@@ -26,11 +26,12 @@ class ApiRequest:
 @dataclass
 class ApiResponse:
     """Normalized response for downstream use."""
-    desc_1: str
-    desc_2: str
-    status: str  # DONE | NOT_DONE | UNCERTAIN
+    #desc_1: str
+    #desc_2: str
     desc: str
     status_reasoning: str
+    status: str  # DONE | NOT_DONE | UNCERTAIN
+
 
 
 # =========================
@@ -185,37 +186,6 @@ class ApiClient:
             response_format={"type": "json_object"},
         )
 
-        ########################API DEBUG CODE##########################
-        # choice = resp.choices[0]
-        # msg = choice.message
-        #
-        # print("finish_reason:", choice.finish_reason)
-        # print("usage:", getattr(resp, "usage", None))
-        # print("has_tool_calls:", bool(getattr(msg, "tool_calls", None)))
-        # print("has_refusal:", bool(getattr(msg, "refusal", None)))
-        #
-        # raw_text = (msg.content or "").strip()
-        # print("raw text (repr):", repr(raw_text))
-        # # If JSON mode + length/content_filter left content empty, retry once without JSON mode
-        # if not raw_text:
-        #     print("[warn] empty content from OpenAI; retrying once without response_format")
-        #     resp = client.chat.completions.create(
-        #         model=self.model,
-        #         messages=[{"role": "user", "content": content}],
-        #         max_tokens=self.max_tokens,
-        #         temperature=self.temperature,
-        #         top_p=self.top_p,
-        #     )
-        #     choice = resp.choices[0]
-        #     msg = choice.message
-        #     raw_text = (msg.content or "").strip()
-        #     print("[retry] finish_reason:", choice.finish_reason)
-        #     print("[retry] usage:", getattr(resp, "usage", None))
-        #     print("[retry] raw text (repr):", repr(raw_text))
-        #     if not raw_text:
-        #         raise RuntimeError(f"OpenAI returned empty content twice. finish_reason={choice.finish_reason}, usage={getattr(resp,'usage',None)}")
-        ######################################################
-
         raw_text = resp.choices[0].message.content or ""
         print("raw text : ", repr(raw_text))
         print("\n================================================================================================")
@@ -238,9 +208,10 @@ class ApiClient:
         # 1) Strict JSON
         try:
             obj = json.loads(raw_text)
-            d1 = obj.get("desc_1", "").strip()
-            d2 = obj.get("desc_2", "").strip()
+            d1 = obj.get("desc", "").strip()
+            d2 = obj.get("status_reasoning", "").strip()
             st = obj.get("status", "").strip().upper()
+
             if st not in STATUS_SET:
                 raise ValueError("invalid status")
             return ApiResponse(d1, d2, st)
@@ -250,7 +221,7 @@ class ApiClient:
         # 2) Fallback regex
         d1 = _re_search(raw_text, r'"?desc_1"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'1\)\s*(.+)') or ""
         d2 = _re_search(raw_text, r'"?desc_2"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'2\)\s*(.+)') or ""
-        st = _re_search(raw_text, r'(DONE|NOT_DONE|UNCERTAIN)') or "UNCERTAIN"
+        st = _re_search(raw_text, r'(DONE|NOT_DONE|PARTIALLY_DONE)') or "UNCERTAIN"
         return ApiResponse(d1.strip(), d2.strip(), st.strip())
 
     # -------------------------

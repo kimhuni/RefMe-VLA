@@ -1,6 +1,6 @@
 # viewer_streamlit.py
 """
-streamlit run datasets/json_data_viewer.py -- --derived_root /data/ghkim/piper_mix_v01_ep5/gpt-5-mini/eval_v2_partially_done
+streamlit run datasets/json_data_viewer.py --derived_root /data/ghkim/piper_mix_v01_ep5/gpt-5-mini/eval_v2_partially_done
 """
 
 import json, glob, argparse, time, random

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-STATUS_SET = {"DONE", "NOT_DONE", "UNCERTAIN"}
+STATUS_SET = {"DONE", "NOT_DONE", "PARTIALLY_DONE"}
 ######## ---- Prompt registry -------- Prompt registry -------- Prompt registry -------- Prompt registry ----###########
 # 키: prompt_id, 값: 포맷 함수(task:str, prev:str) -> str
 
@@ -226,7 +226,7 @@ def _prompt_v2_partially_done(task: str, prev: str, prev_status: str) -> str:
         "You are an image-analysis expert for robotic manipulation.\n"
         "Inputs:\n"
         f"- TASK: {task}\n"
-        f"- PREV_REASONING_STATUS: {prev}\n"
+        f"- PREV_STATUA_REASONING: {prev}\n"
         f"- PREV_STATUS: {prev_status}\n"
         "- IMAGES: [TABLE]=global scene; [WRIST]=close-up of gripper/contact.\n"
         "\n"
