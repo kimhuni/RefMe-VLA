@@ -194,30 +194,32 @@ class ApiClient:
     # Parsing helpers
     # -------------------------
     def _parse_response(self, raw_text: str) -> ApiResponse:
-        """
-        Strict JSON first; if that fails, pull fields via regex.
-        """
-        # Normalize to the first JSON object if extra text is around it
+        # JSON 부분만 추출
         if not raw_text.strip().startswith("{"):
             lb = raw_text.find("{")
             rb = raw_text.rfind("}")
             if lb != -1 and rb != -1 and rb > lb:
-                raw_text = raw_text[lb:rb+1]
+                raw_text = raw_text[lb:rb + 1]
 
-        # 1) Strict JSON
+        # 1) JSON parse
         try:
             obj = json.loads(raw_text)
-            d1 = obj.get("desc", "").strip()
-            d2 = obj.get("status_reasoning", "").strip()
+        except Exception:
+            obj = None
+
+        if isinstance(obj, dict):
+            d1 = obj.get("desc", "").strip() or obj.get("desc_1", "").strip()
+            d2 = obj.get("status_reasoning", "").strip() or obj.get("desc_2", "").strip()
             st = obj.get("status", "").strip().upper()
 
             if st not in STATUS_SET:
-                raise ValueError("invalid status")
-            return ApiResponse(d1, d2, st)
-        except Exception:
-            pass
+                # 경고만 찍고 기본값으로 보정
+                # print(f"[WARN] invalid status '{st}', raw={raw_text[:120]}")
+                st = "NOT_DONE"
 
-        # 2) Fallback regex
+            return ApiResponse(d1, d2, st)
+
+        # 2) JSON이 아예 깨졌을 때만 regex fallback
         d1 = _re_search(raw_text, r'"?desc_1"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'1\)\s*(.+)') or ""
         d2 = _re_search(raw_text, r'"?desc_2"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'2\)\s*(.+)') or ""
         st = _re_search(raw_text, r'(DONE|NOT_DONE|PARTIALLY_DONE)') or "UNCERTAIN"

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-STATUS_SET = {"DONE", "NOT_DONE", "UNCERTAIN"}
+STATUS_SET = {"DONE", "NOT_DONE", "PARTIALLY_DONE"}
 ######## ---- Prompt registry -------- Prompt registry -------- Prompt registry -------- Prompt registry ----###########
 # 키: prompt_id, 값: 포맷 함수(task:str, prev:str) -> str
 
