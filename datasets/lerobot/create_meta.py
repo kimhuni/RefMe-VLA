@@ -256,6 +256,6 @@ if __name__ == "__main__":
     episodes = 1944
     create_meta(root_dir, episodes)
 
-    root_dir = "/datasets/piper_grape0711/lerobot_5hz/test"
+    root_dir = "/datasets/piper_grape0711/lerobot_5hz/test_VLM"
     episodes = 216
     create_meta(root_dir, episodes)

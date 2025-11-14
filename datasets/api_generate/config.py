@@ -250,6 +250,50 @@ def _prompt_v2_partially_done(task: str, prev: str, prev_status: str) -> str:
         "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
     )
 
+def _prompt_v4_partially_done(task: str, prev: str, prev_status: str) -> str:
+    return (
+        "SYSTEM:\n"
+        "- Return ONE-LINE JSON ONLY: {\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}\n"
+        "- DO NOT copy PREV_STATUS_REASONING verbatim. If you need to refer to it, summarize it in ≤8 words.\n"
+        "- Only copy previous reasoning/status when the image is genuinely unusable "
+        "(robot completely out of frame, strong blur, heavy occlusion).\n"
+        "- When gripper pose, alignment, or contact changes, you MUST update status_reasoning "
+        "to reflect the new attempt/progress (e.g., 'one press done; attempting second').\n"
+        "- Sticky DONE: If PREV_STATUS is DONE, keep DONE unless a clear reversal is visible.\n"
+        "- Completion evidence does NOT require large deformation or bright illumination. "
+        "Small downward movement, stable aligned contact, or subtle displacement CAN count as a completed press "
+        "when consistent with the task.\n"
+        "- Avoid overly conservative NOT_DONE; prefer PARTIALLY_DONE when the image shows clear purposeful contact "
+        "or a repeated press attempt.\n"
+        "\n"
+        "USER:\n"
+        "You are an image-analysis expert for robotic manipulation.\n"
+        "Inputs:\n"
+        f"- TASK: {task}\n"
+        f"- PREV_STATUS_REASONING (summarize): {prev}\n"
+        f"- PREV_STATUS: {prev_status}\n"
+        "- IMAGES: TABLE (global), WRIST (close-up of contact).\n"
+        "\n"
+        "Write EXACTLY TWO sentences:\n"
+        "1) desc = concise visible description (mention TABLE/WRIST when relevant; no speculation).\n"
+        "2) status_reasoning = updated progress based on CURRENT image: "
+        "if a new press is attempted or completed, explicitly say so "
+        "(e.g., 'first press complete; attempting second'). "
+        "Only when the view is unusable may you reuse previous reasoning.\n"
+        "\n"
+        "Status rules (DONE/NOT_DONE/PARTIALLY_DONE):\n"
+        "- DONE: all subtasks/presses visibly completed in order.\n"
+        "- PARTIALLY_DONE: ≥1 subtask/press completed but not all.\n"
+        "- NOT_DONE: no verified completion.\n"
+        "\n"
+        "Constraints:\n"
+        "- desc/status_reasoning each 8–16 words.\n"
+        "- Use visible cues: contact, slight displacement, alignment, release, motion halt.\n"
+        "\n"
+        "OUTPUT JSON ONLY on one line:\n"
+        "{\"desc\":\"...\",\"status_reasoning\":\"...\",\"status\":\"DONE|NOT_DONE|PARTIALLY_DONE\"}"
+    )
+
 PROMPTS = {
     "B_eval_v3": _prompt_B_eval_v3,
     "B_eval_compact": _prompt_B_eval_compact,
@@ -262,6 +306,7 @@ PROMPTS = {
     "eval_1031_mix": _prompt_eval_mix,
     "eval_final": _prompt_final,
     "eval_v2_partially_done": _prompt_v2_partially_done,
+    "eval_v4_partially_done": _prompt_v4_partially_done,
 }
 
 ########################################################################################################################

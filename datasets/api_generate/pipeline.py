@@ -134,6 +134,7 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                             "desc_1": resp.desc,
                             "desc_2": resp.status_reasoning,
                             "status": resp.status,
+                            # "raw_response": resp.
                         },
                         "meta": {
                             "capture": {"fps": fps, "cameras": ["side", "wrist"]},
@@ -158,8 +159,8 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                     # prev_desc = (resp.desc_2 + ": " + resp.status).strip()
                     prev_desc = resp.status_reasoning
                     prev_status = resp.status
-                    if len(prev_desc) > cfg.prev_desc_max_chars:
-                        prev_desc = prev_desc[: cfg.prev_desc_max_chars - 3] + "..."
+                    # if len(prev_desc) > cfg.prev_desc_max_chars:
+                    #     prev_desc = prev_desc[: cfg.prev_desc_max_chars - 3] + "..."
 
 
                 except Exception as e:

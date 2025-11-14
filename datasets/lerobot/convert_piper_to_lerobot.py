@@ -227,7 +227,7 @@ def create_stats(piper_path, lerobot_path):
     with open(lerobot_path + '/train/meta/stats.json', 'w') as f:
         json.dump(stats_dict, f, indent=4)
 
-    with open(lerobot_path + '/test/meta/stats.json', 'w') as f:
+    with open(lerobot_path + '/test_VLM/meta/stats.json', 'w') as f:
         json.dump(stats_dict, f, indent=4)
 
 
@@ -241,7 +241,7 @@ if __name__ == '__main__':
             target_path = lerobot_path + '/train'
         else:
             data_path = piper_path + f'/validation/aligncups_episode{episode_num}'
-            target_path = lerobot_path + '/test'
+            target_path = lerobot_path + '/test_VLM'
 
         convert_piper_to_lerobot(target_path, data_path, episode_num)
     # create_stats(piper_path, lerobot_path)
