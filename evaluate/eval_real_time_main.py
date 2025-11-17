@@ -8,11 +8,11 @@ import time
 
 from termcolor import colored
 
-from lerobot.common.configs import parser
-from lerobot.common.utils.utils import init_logging
+from lerobot.configs import parser
+from common.utils.utils import init_logging
 
-from realtime_HLP_qwen import HLPConfig, HighLevelPlanner
-from realtime_LLP_pi0 import (
+from evaluate.eval_real_time_HLP_qwen import HLPConfig, HighLevelPlanner
+from evaluate.eval_real_time_LLP_pi0 import (
     LLPConfig,
     LLPRuntimeContext,
     init_llp_runtime,
@@ -104,12 +104,12 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
             # HLP용: global view(SIDE)=exo, WRIST=wrist
             side_img_tensor = llp_ctx.exo_rs_cam.image_for_inference()
             wrist_img_tensor = llp_ctx.wrist_rs_cam.image_for_inference()
-        else:
+        # else:
             # 오프라인/디버그용: 랜덤 이미지 (필요시 별도 util로 변경)
-            from lerobot.scripts.eval_real_time_utils import random_piper_image
-
-            side_img_tensor = random_piper_image()
-            wrist_img_tensor = random_piper_image()
+            # from lerobot.scripts.eval_real_time_utils import random_piper_image
+            #
+            # side_img_tensor = random_piper_image()
+            # wrist_img_tensor = random_piper_image()
 
         # 2-3) subtask / status 결정
         subtask_text, status = decide_subtask_and_status(

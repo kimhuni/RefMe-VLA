@@ -201,7 +201,8 @@ class HighLevelPlanner:
 
         # 로그 (요청 2번)
         logging.info(
-            f"[HLP] status={parsed['status']} | subtask={parsed['subtask']} | "
+            # f"[HLP] status={parsed['status']} | subtask={parsed['subtask']} | "
+            f"[HLP] status={parsed['status']} | subtask={task} | "
             f"desc_1={parsed['desc_1']} | desc_2={parsed['desc_2']}"
         )
 
