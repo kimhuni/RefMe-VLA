@@ -7,8 +7,13 @@ import logging
 import time
 
 from termcolor import colored
+from transformers import PretrainedConfig
 
-from lerobot.configs import parser
+from configs.default import DatasetConfig, EvalConfig, WandBConfig
+from configs.policies import PreTrainedConfig
+
+
+# from configs.parser import parser
 from common.utils.utils import init_logging
 
 from evaluate.eval_real_time_HLP_qwen import HLPConfig, HighLevelPlanner
@@ -62,7 +67,7 @@ def decide_subtask_and_status(
         return subtask, status
 
 
-@parser.wrap()
+# @parser.wrap()
 def eval_real_time_main(cfg: EvalRealTimeMainConfig):
     """
     HLP + LLP를 동시에 돌리는 메인 루프.
@@ -171,3 +176,60 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
         time.sleep(0.2)
 
     logging.info("[MAIN] Real-time loop finished.")
+
+# eval_real_time_main.py (마지막 부분에 추가)
+
+if __name__ == "__main__":
+    import argparse
+
+    # --- 1) argparse로 꼭 필요한 옵션만 받기 ---
+    p = argparse.ArgumentParser()
+    p.add_argument("--use_hlp", type=bool, default=True)
+    p.add_argument("--task", type=str, default="press the blue button")
+    p.add_argument("--max_steps", type=int, default=1000)
+    p.add_argument("--llp_model_path", type=str, default="/ckpt/pi0")
+    p.add_argument("--dataset_repo_id", type=str, default=None)
+    p.add_argument("--dataset_root", type=str, default=None)
+    p.add_argument("--use_devices", type=bool, default=True)
+    p.add_argument("--hlp_model_path", type=str, default=None)
+    p.add_argument("--hlp_adapter_path", type=str, default=None)
+    p.add_argument("--hlp_use_qlora", type=bool, default=True)
+
+    p.add_argument("--llp_device", type=str, default="cuda:0")
+    p.add_argument("--hlp_device", type=str, default="cuda:0")
+    args = p.parse_args()
+
+    # --- 2) HLP / LLP config 생성 ---
+    dataset_cfg = DatasetConfig(
+        repo_id=args.dataset_repo_id,
+        root=args.dataset_root,
+    )
+
+    pretrained_cfg = PreTrainedConfig(
+        device=args.llp_device,
+    )
+
+    llp_cfg = LLPConfig(
+        train_dataset=DatasetConfig(),
+        policy=pretrained_cfg,
+        use_devices=bool(args.use_devices),
+        task=args.task,
+        max_steps=args.max_steps,
+        device=args.llp_device,
+    )
+
+    hlp_cfg = HLPConfig(
+        base_model_path=args.hlp_model_path,
+        adapter_path=args.hlp_adapter_path,
+        is_qlora=args.hlp_use_qlora,
+        device=args.llp_device,
+    )
+
+    cfg = EvalRealTimeMainConfig(
+        use_hlp=bool(args.use_hlp),
+        hlp=hlp_cfg,
+        llp=llp_cfg,
+    )
+
+    # --- 3) main 호출 ---
+    eval_real_time_main(cfg)

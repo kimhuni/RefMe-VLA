@@ -26,7 +26,7 @@ from typing import Any, ClassVar
 import pyarrow as pa
 import torch
 import torchvision
-from datasets.features.features import register_feature
+#from datasets.features.features import register_feature
 from PIL import Image
 
 
@@ -321,14 +321,14 @@ class VideoFrame:
         return self.pa_type
 
 
-with warnings.catch_warnings():
-    warnings.filterwarnings(
-        "ignore",
-        "'register_feature' is experimental and might be subject to breaking changes in the future.",
-        category=UserWarning,
-    )
+# with warnings.catch_warnings():
+#     warnings.filterwarnings(
+#         "ignore",
+#         "'register_feature' is experimental and might be subject to breaking changes in the future.",
+#         category=UserWarning,
+#     )
     # to make VideoFrame available in HuggingFace `datasets`
-    register_feature(VideoFrame, "VideoFrame")
+    # register_feature(VideoFrame, "VideoFrame")
 
 
 def get_audio_info(video_path: Path | str) -> dict:

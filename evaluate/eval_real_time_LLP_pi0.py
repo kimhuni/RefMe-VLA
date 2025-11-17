@@ -7,13 +7,15 @@ import logging
 import time
 import torch
 
-from lerobot.common.configs import parser
 from common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from common.utils.utils import (
     init_devices,
     get_safe_torch_device,
     init_keyboard_listener
 )
+
+from configs.default import DatasetConfig, EvalConfig, WandBConfig
+from configs.policies import PreTrainedConfig
 from common.utils.random_utils import set_seed
 from common.robot_devices.robot_utils import read_end_pose_msg, ctrl_end_pose, read_joint_msg, set_zero_configuration
 from common.policies.factory import make_policy, wrap_policy
@@ -23,7 +25,7 @@ from common.policies.factory import make_policy, wrap_policy
 # from lerobot.common.configs.method import MethodConfig  # 예시
 # from lerobot.common.configs.dataset import DatasetConfig  # 예시
 
-from common.utils.utils import get_safe_torch_device, set_seed
+from common.utils.utils import get_safe_torch_device
 from common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from common.policies.factory import make_policy, wrap_policy
 
@@ -45,22 +47,31 @@ class LLPConfig:
     - use_devices: 실제 로봇/카메라 사용 여부
     - task: high-level task 문자열 ("press the blue button" 등)
     - max_steps: 최대 루프 스텝 수 (main에서 사용)
-    - seed: 재현성용 시드
-    - device: LLP policy를 올릴 torch 디바이스 (예: "cuda:0")
     - train_dataset / policy / method: 기존 eval_real_time_ours.py 에서 쓰던 설정 그대로
     """
+    # 아래 세 개는 parser.wrap() / Hydra 가 채워주는 걸 가정
+    train_dataset: DatasetConfig
+    policy: PreTrainedConfig
+    eval: EvalConfig = field(default_factory=EvalConfig)
+
+    policy_path: str = None
+    output_dir: str = None
     use_devices: bool = True
     task: str = "press the blue button"
     max_steps: int = 1000
     seed: Optional[int] = None
+    fps: int = 5
 
     device: str = "cuda:0"
 
-    # 아래 세 개는 parser.wrap() / Hydra 가 채워주는 걸 가정
-    train_dataset: Any = None
-    policy: Any = None
-    method: Any = None
-
+    def __post_init__(self):
+        if self.policy_path:
+            self.policy = PreTrainedConfig.from_pretrained(self.policy_path)
+            self.policy.pretrained_path = self.policy_path
+        else:
+            logging.warning(
+                "No pretrained path was provided, evaluated policy will be built from scratch (random weights)."
+            )
 
 @dataclass
 class LLPRuntimeContext:
