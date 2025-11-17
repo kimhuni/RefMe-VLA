@@ -4,7 +4,7 @@
 #   streamlit run datasets/view_model_outputs.py -- --path /data/.../shards/*.jsonl
 #   (파일 하나만도 OK: --path /data/.../chunk_000_evaluation.jsonl)
 """
-streamlit run datasets/json_data_view_HLP.py -- --path "/data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_step_1k/shards/*.jsonl"
+streamlit run datasets/json_data_view_HLP.py -- --path "/data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_QLoRA_1114_final_1k/shards/*.jsonl"
 """
 
 import json, glob, argparse, re

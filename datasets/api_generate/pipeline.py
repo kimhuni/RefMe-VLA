@@ -114,8 +114,8 @@ def run_pipeline(paths: Paths, cfg: GenConfig, dataset_name: str, fps: int = 1, 
                     if prev_status == "DONE":
                         resp.status = "DONE"
                         # 선택: desc_2에 유지 근거 한 줄 고정
-                        if not resp.desc_2.strip():
-                            resp.desc_2 = "Previous frame DONE; task remains completed with no reversal visible."
+                        if not resp.status_reasoning.strip():
+                            resp.status_reasoning = "Previous frame DONE; task remains completed with no reversal visible."
                     print("current episode : ", epi_idx)
 
                     record = {

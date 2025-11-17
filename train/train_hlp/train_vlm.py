@@ -237,18 +237,6 @@ def main():
     # 9. Initialize Data Collator
     data_collator = DataCollatorForVLM(tokenizer=tokenizer)
 
-    # 10. Configure Trainer Settings
-    # [Modified] We no longer need to manually set these from model_args
-    # They are already correctly populated in training_args by HfArgumentParser
-    #training_args.gradient_checkpointing = model_args.gradient_checkpointing
-    #training_args.bf16 = model_args.bf16
-    #training_args.dataloader_num_workers = model_args.dataloader_num_workers
-    #training_args.remove_unused_columns = False
-
-    #training_args.gradient_checkpointing = model_args.gradient_checkpointing
-    #training_args.bf16 = model_args.bf16
-    #training_args.dataloader_num_workers = model_args.dataloader_num_workers
-    #training_args.remove_unused_columns = False
 
     # 11. Initialize Trainer
     trainer = Trainer(

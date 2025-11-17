@@ -222,7 +222,7 @@ class ApiClient:
         # 2) JSON이 아예 깨졌을 때만 regex fallback
         d1 = _re_search(raw_text, r'"?desc_1"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'1\)\s*(.+)') or ""
         d2 = _re_search(raw_text, r'"?desc_2"?\s*[:=]\s*"([^"]+)"') or _re_search(raw_text, r'2\)\s*(.+)') or ""
-        st = _re_search(raw_text, r'(DONE|NOT_DONE|PARTIALLY_DONE)') or "UNCERTAIN"
+        st = _re_search(raw_text, r'(DONE|NOT_DONE|PARTIALLY_DONE)') or "PARTIALLY_DONE"
 
         return ApiResponse(d1.strip(), d2.strip(), st.strip())
 
