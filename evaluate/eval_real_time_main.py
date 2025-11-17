@@ -200,18 +200,12 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     # --- 2) HLP / LLP config 생성 ---
-    dataset_cfg = DatasetConfig(
-        repo_id=args.dataset_repo_id,
-        root=args.dataset_root,
-    )
-
-    pretrained_cfg = PreTrainedConfig(
-        device=args.llp_device,
-    )
-
     llp_cfg = LLPConfig(
-        train_dataset=DatasetConfig(),
-        policy=pretrained_cfg,
+        train_dataset=DatasetConfig(
+            repo_id=args.llp_dataset_path,
+            root=args.llp_dataset_path,
+        ),
+        policy_path=args.llp_model_path,
         use_devices=bool(args.use_devices),
         task=args.task,
         max_steps=args.max_steps,

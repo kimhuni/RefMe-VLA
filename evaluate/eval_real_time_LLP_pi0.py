@@ -51,26 +51,30 @@ class LLPConfig:
     """
     # 아래 세 개는 parser.wrap() / Hydra 가 채워주는 걸 가정
     train_dataset: DatasetConfig
-    policy: PreTrainedConfig
+    policy: Optional[PreTrainedConfig] = None
     eval: EvalConfig = field(default_factory=EvalConfig)
 
-    policy_path: str = None
-    output_dir: str = None
+    policy_path: Optional[str] = None
+    output_dir: Optional[str] = None
     use_devices: bool = True
     task: str = "press the blue button"
     max_steps: int = 1000
     seed: Optional[int] = None
     fps: int = 5
-
     device: str = "cuda:0"
 
     def __post_init__(self):
+        if self.policy is not None:
+            return
+
         if self.policy_path:
+            # config.json을 읽어 적절한 서브클래스 인스턴스를 돌려줌 (type=pi0 등)
             self.policy = PreTrainedConfig.from_pretrained(self.policy_path)
             self.policy.pretrained_path = self.policy_path
+            logging.info(f"[LLPConfig] Loaded policy cfg from: {self.policy_path} (type={self.policy.type})")
         else:
             logging.warning(
-                "No pretrained path was provided, evaluated policy will be built from scratch (random weights)."
+                "No policy_path provided; policy config will need to be set manually before make_policy()."
             )
 
 @dataclass
