@@ -12,6 +12,13 @@ from transformers import (
     AutoProcessor,
     BitsAndBytesConfig,
 )
+
+from common.utils.utils import (
+    init_devices,
+    get_safe_torch_device,
+    init_keyboard_listener
+)
+
 from peft import PeftModel
 from torchvision.transforms.functional import to_pil_image
 
@@ -38,10 +45,7 @@ def make_hlp_prompt(task: str, prev: str, prev_status: str) -> str:
         f"PREV_STATUS: {prev_status}\n"
         "Describe what is visibly happening now (desc_1) and the visible evidence for completion (desc_2).\n"
         "Then decide the status: DONE / NOT_DONE / UNCERTAIN.\n"
-        # subtask까지 HLP가 뽑아줄 수 있게 확장 (원하면 제거 가능)
-        "If useful, also infer a finer-grained textual subtask (subtask), "
-        "like 'approach the button', 'press the button fully', etc.\n"
-        "Output JSON: {\"desc_1\":\"...\",\"desc_2\":\"...\",\"status\":\"...\",\"subtask\":\"...\"}"
+        "Output JSON: {\"desc_1\":\"...\",\"desc_2\":\"...\",\"status\":\"...\"}"
     )
 
 
@@ -127,12 +131,6 @@ class HighLevelPlanner:
         self.prev_desc: str = ""
         self.prev_status: str = "NOT_DONE"
 
-    def reset(self):
-        """ESC 등으로 HLP 히스토리를 리셋할 때 호출."""
-        logging.info("[HLP] Reset prev_desc / prev_status")
-        self.prev_desc = ""
-        self.prev_status = "NOT_DONE"
-
         # Optional keyboard listener to reset HLP state with ESC
         self._listener = None
         self._event = None
@@ -142,6 +140,13 @@ class HighLevelPlanner:
                 logging.info("[HLP] Keyboard listener initialized: press ESC to reset HLP state.")
             except Exception as e:
                 logging.warning(f"[HLP] Keyboard listener init failed: {e}")
+
+    def reset(self):
+        """ESC 등으로 HLP 히스토리를 리셋할 때 호출."""
+        logging.info("[HLP] Reset prev_desc / prev_status")
+        self.prev_desc = ""
+        self.prev_status = "NOT_DONE"
+
 
     def attach_keyboard_event(self, event: dict):
         """Optionally attach an external keyboard event dict (e.g., from main loop)."""
