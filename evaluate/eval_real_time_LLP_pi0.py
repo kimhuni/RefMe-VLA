@@ -20,11 +20,6 @@ from common.utils.random_utils import set_seed
 from common.robot_devices.robot_utils import read_end_pose_msg, ctrl_end_pose, read_joint_msg, set_zero_configuration
 from common.policies.factory import make_policy, wrap_policy
 
-# 여기는 프로젝트에서 실제 사용하는 Config 경로/이름으로 맞춰줘야 함
-# from lerobot.common.configs.policy import PolicyConfig  # 예시
-# from lerobot.common.configs.method import MethodConfig  # 예시
-# from lerobot.common.configs.dataset import DatasetConfig  # 예시
-
 from common.utils.utils import get_safe_torch_device
 from common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from common.policies.factory import make_policy, wrap_policy

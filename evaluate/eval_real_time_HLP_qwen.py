@@ -133,6 +133,21 @@ class HighLevelPlanner:
         self.prev_desc = ""
         self.prev_status = "NOT_DONE"
 
+        # Optional keyboard listener to reset HLP state with ESC
+        self._listener = None
+        self._event = None
+        if init_keyboard_listener is not None:
+            try:
+                self._listener, self._event, _ = init_keyboard_listener()
+                logging.info("[HLP] Keyboard listener initialized: press ESC to reset HLP state.")
+            except Exception as e:
+                logging.warning(f"[HLP] Keyboard listener init failed: {e}")
+
+    def attach_keyboard_event(self, event: dict):
+        """Optionally attach an external keyboard event dict (e.g., from main loop)."""
+        self._event = event
+
+
     @torch.inference_mode()
     def step(
         self,
@@ -147,6 +162,13 @@ class HighLevelPlanner:
           - JSON 파싱
           - prev_desc, prev_status 업데이트
         """
+        # Reset internal history if ESC was pressed
+        if self._event and self._event.get("set initial", False):
+            self.reset()
+            # clear the flag so we don't reset every step
+            self._event["set initial"] = False
+            logging.info("[HLP] ESC detected: state reset to prev_desc='' / prev_status='NOT_DONE'.")
+
         side_img = _safe_tensor_to_pil(side_img_tensor)
         wrist_img = _safe_tensor_to_pil(wrist_img_tensor)
         images_list = [side_img, wrist_img]

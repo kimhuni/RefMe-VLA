@@ -340,7 +340,7 @@ def init_keyboard_listener():
     from pynput import keyboard
 
     event = {}
-    event['stop recording'] = False
+    event['set initial'] = False
     task = {}
     task['task1 : open the pot'] = False
     task['task2 : pour the block'] = False
@@ -349,7 +349,7 @@ def init_keyboard_listener():
 
     def on_press(key):
         if key == keyboard.Key.esc:
-            event['stop recording'] = True
+            event['set initial'] = True
             print("esc is pressed")
         elif key == keyboard.KeyCode.from_char('1'):
             task['task1 : open the pot'] = True

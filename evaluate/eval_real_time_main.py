@@ -98,11 +98,11 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
 
         # 2-1) ESC 등으로 HLP 리셋 (키바인딩은 init_keyboard_listener에서 설정했다고 가정)
         event = llp_ctx.keyboard_event
-        if cfg.use_hlp and event.get("reset_hlp", False):
+        if cfg.use_hlp and event.get("set initial", False):
             if hlp is not None:
                 hlp.reset()
             done_sent_zero = False
-            event["reset_hlp"] = False
+            event["set initial"] = False
 
         # 2-2) HLP/LLP 공통용 이미지 캡처
         if cfg.llp.use_devices:
@@ -127,7 +127,8 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
 
         # 2-4) status에 따라 LLP task 입력 결정
         if status == "DONE":
-            llp_task_input = None
+            # llp_task_input = None
+            llp_task_input = "DONE"
         else:
             llp_task_input = subtask_text
 
