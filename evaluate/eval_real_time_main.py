@@ -203,8 +203,8 @@ if __name__ == "__main__":
     # --- 2) HLP / LLP config 생성 ---
     llp_cfg = LLPConfig(
         train_dataset=DatasetConfig(
-            repo_id=args.llp_dataset_path,
-            root=args.llp_dataset_path,
+            repo_id=args.dataset_repo_id,
+            root=args.dataset_root,
         ),
         policy_path=args.llp_model_path,
         use_devices=bool(args.use_devices),

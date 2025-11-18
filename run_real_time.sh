@@ -12,7 +12,7 @@ MAX_STEPS=200
 
 # ============================
 python -m evaluate.eval_real_time_main \
-  --use_hlp=false \
+  --use_hlp=true \
   --task="${TASK}" \
   --max_steps="${MAX_STEPS}" \
   --llp_model_path="${LLP_BASE_MODEL}" \
@@ -21,4 +21,6 @@ python -m evaluate.eval_real_time_main \
   --use_devices=true \
   --hlp_model_path="${HLP_BASE_MODEL}" \
   --hlp_adapter_path="${HLP_ADAPTER_PATH}" \
-  --hlp_use_qlora=true
+  --hlp_use_qlora=true \
+  --llp_device="cuda" \
+  --llp_device="cuda"

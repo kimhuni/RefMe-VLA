@@ -23,6 +23,7 @@ from common.policies.factory import make_policy, wrap_policy
 from common.utils.utils import get_safe_torch_device
 from common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from common.policies.factory import make_policy, wrap_policy
+from common.policies.pi0.modeling_pi0 import PI0Policy
 
 
 # 필요하면 프로젝트에서 쓰는 config 타입으로 교체해도 됨
@@ -56,6 +57,7 @@ class LLPConfig:
     max_steps: int = 1000
     seed: Optional[int] = None
     fps: int = 5
+    cam_list: list[str] = field(default_factory=lambda: ['wrist', 'exo', 'table'])
     device: str = "cuda:0"
 
     def __post_init__(self):
@@ -172,6 +174,11 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     # 4) pi0 policy 생성
     if cfg.policy is None:
         raise ValueError("[LLP] cfg.policy 가 설정되지 않았습니다.")
+    # pi_cfg = PI0Config
+    # policy = PI0Policy(
+    #     config=pi_cfg,
+    #     dataset_stats=train_dataset_meta
+    # )
 
     policy = make_policy(
         cfg=cfg.policy,
@@ -179,16 +186,16 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     )
 
     # 5) method(wrap) 적용 (LoRA / MSP / 등등)
-    if cfg.method is None:
-        raise ValueError("[LLP] cfg.method 가 설정되지 않았습니다.")
+    # if cfg.method is None:
+    #     raise ValueError("[LLP] cfg.method 가 설정되지 않았습니다.")
 
-    policy, res = wrap_policy(
-        policy=policy,
-        cfg=cfg.method,
-        is_master=True,
-        device=device,
-    )
-    logging.info(res)
+    # policy, res = wrap_policy(
+    #     policy=policy,
+    #     cfg=cfg.method,
+    #     is_master=True,
+    #     device=device,
+    # )
+    # logging.info(res)
     policy.eval()
 
     # 6) 카메라 녹화 시작 (선택)
