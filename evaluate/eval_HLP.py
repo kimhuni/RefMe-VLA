@@ -4,8 +4,8 @@
 CUDA_VISIBLE_DEVICES=0 python evaluate/eval_HLP.py \
     --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
     --adapter_path /result/ghkim/HLP_qwen_2.5_7b_LoRA_r16_press_the_blue_button_ep60_1109_RAM_test/checkpoint-2000 \
-    --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-000.jsonl \
-    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_000_evaluation.jsonl \
+    --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-001.jsonl \
+    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_001_evaluation.jsonl \
     --is_qlora True
 
 CUDA_VISIBLE_DEVICES=2 python evaluate/eval_HLP.py \
