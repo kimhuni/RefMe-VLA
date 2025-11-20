@@ -7,10 +7,10 @@ Qwen2.5‑VL + QLoRA 어댑터 병합 스크립트
 - processor(tokenizer+image_processor)도 함께 저장합니다.
 
 예)
-python merge_lora.py \
-  --base_model Qwen/Qwen2.5-VL-7B-Instruct \
-  --adapter /path/to/checkpoint-2000 \
-  --out     /path/to/merged_model \
+python train/merge_lora.py \
+  --base_model /home/minji/Desktop/data/Qwen2.5-VL-7B-Instruct \
+  --adapter /home/minji/Desktop/data/finetuned_model/ghkim/HLP_qwen_2.5_7b_QLoRA_r16_press_the_blue_button_ep60_1114_final/checkpoint-2000 \
+  --out     /home/minji/Desktop/data/finetuned_model/ghkim/HLP_qwen_2.5_7b_QLoRA_r16_press_the_blue_button_ep60_1114_final/merged_model_2k \
   --dtype bf16 \
   --load_in_4bit
 """

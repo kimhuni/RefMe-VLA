@@ -107,21 +107,25 @@ class HighLevelPlanner:
         logging.info(f"[HLP] Loading base model from: {cfg.base_model_path}")
         base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             cfg.base_model_path,
-            quantization_config=bnb_config,
+            # quantization_config=bnb_config,
             device_map=cfg.device,
             torch_dtype="auto",
             attn_implementation="eager",
         )
 
-        logging.info(f"[HLP] Loading adapter from: {cfg.adapter_path}")
-        model = PeftModel.from_pretrained(
-            base_model,
-            cfg.adapter_path,
-            ignore_mismatched_sizes=True,
-        )
+        if cfg.is_qlora:
+            logging.info(f"[HLP] Loading adapter from: {cfg.adapter_path}")
+            model = PeftModel.from_pretrained(
+                base_model,
+                cfg.adapter_path,
+                ignore_mismatched_sizes=True,
+            )
 
-        logging.info("[HLP] Merging adapter into base model (memory-only).")
-        self.model = model.merge_and_unload()
+            logging.info("[HLP] Merging adapter into base model (memory-only).")
+            self.model = model.merge_and_unload()
+        else: # vanilla model
+            self.model = base_model
+
         self.model.eval()
 
         self.processor = AutoProcessor.from_pretrained(cfg.base_model_path)
