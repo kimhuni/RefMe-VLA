@@ -17,10 +17,7 @@ from termcolor import colored
 from configs.default import DatasetConfig
 from common.utils.utils import init_logging
 
-from evaluate.eval_real_time_API.eval_real_time_API_HLP_qwen import (
-    HLPConfig,
-    HighLevelPlanner,  # local fallback
-)
+from evaluate.eval_real_time_API.eval_real_time_API_HLP_qwen import HLPConfig, HighLevelPlanner
 from evaluate.eval_real_time_API.eval_real_time_API_LLP_pi0 import (
     LLPConfig,
     LLPRuntimeContext,

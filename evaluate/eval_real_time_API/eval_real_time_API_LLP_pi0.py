@@ -180,6 +180,8 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     #     dataset_stats=train_dataset_meta
     # )
 
+    logging.info("Making policy.")
+
     policy = make_policy(
         cfg=cfg.policy,
         ds_meta=train_dataset_meta,

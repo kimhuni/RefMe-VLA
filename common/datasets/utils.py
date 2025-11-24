@@ -29,7 +29,7 @@ import jsonlines
 import numpy as np
 import packaging.version
 import torch
-from common.datasets.table import embed_table_storage
+# from common.datasets.table import embed_table_storage
 from huggingface_hub import DatasetCard, DatasetCardData, HfApi
 from huggingface_hub.errors import RevisionNotFoundError
 from PIL import Image as PILImage
