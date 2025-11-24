@@ -59,6 +59,8 @@ class LLPConfig:
     fps: int = 5
     cam_list: list[str] = field(default_factory=lambda: ['wrist', 'exo', 'table'])
     device: str = "cuda:0"
+    infer_chunk: int = 45
+
 
     def __post_init__(self):
         if self.policy is not None:
@@ -263,6 +265,10 @@ def llp_step(
     t_pred_start = time.time()
     with torch.no_grad():
         action_pred = ctx.policy.select_action(batch).squeeze()
+    # reset after "infer_chunk" action
+    if len(ctx.policy._action_queue) < ctx.cfg.infer_chunk:
+        ctx.policy.reset()
+
     t_pred_end = time.time()
 
     # end pose + gripper 포맷 (프로젝트 규칙에 맞게 int 캐스팅)

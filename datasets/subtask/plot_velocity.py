@@ -35,6 +35,7 @@ def compute_velocity_from_parquet(
     # 각 row의 observation.state 가 리스트/ndarray 라고 가정
     states = np.stack(df[state_col].to_numpy())  # shape: (T, 7) 정도
     pos = states[:, :3]  # (x, y, z)만 사용
+    z = pos[:, 2]  # (T,)
 
     # 위치 차이 → 속도 크기
     dp = np.diff(pos, axis=0)  # shape: (T-1, 3)
@@ -56,17 +57,23 @@ def compute_velocity_from_parquet(
         T = len(df)
         t = np.arange(1, T) * dt
 
-    return t, v
+    return t, v, z
 
 
-def plot_velocity(t, v, title: str = None):
-    plt.figure(figsize=(10, 4))
-    plt.plot(t, v)
-    plt.xlabel("Time [s]")
-    plt.ylabel("EE translational speed")
-    plt.grid(True, alpha=0.3)
+def plot_velocity(t, v, z, title: str = None):
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    ax1.plot(t, v)
+    ax1.set_ylabel("EE speed")
+    ax1.grid(True, alpha=0.3)
     if title is not None:
-        plt.title(title)
+        ax1.set_title(title)
+
+    ax2.plot(t, z[1:])  # z must align with t (T-1)
+    ax2.set_xlabel("Time [s]")
+    ax2.set_ylabel("Z position")
+    ax2.grid(True, alpha=0.3)
+
     plt.tight_layout()
     plt.show()
 
@@ -97,12 +104,12 @@ def main():
     if not os.path.isfile(args.parquet_path):
         raise FileNotFoundError(f"Parquet file not found: {args.parquet_path}")
 
-    t, v = compute_velocity_from_parquet(
+    t, v, z = compute_velocity_from_parquet(
         args.parquet_path, state_col=args.state_col, freq_hz=args.freq_hz
     )
 
     title = os.path.basename(args.parquet_path)
-    plot_velocity(t, v, title=title)
+    plot_velocity(t, v, z, title=title)
 
 
 if __name__ == "__main__":
