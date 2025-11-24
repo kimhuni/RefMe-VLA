@@ -1,0 +1,12 @@
+python -m evaluate.eval_real_time_API_main \
+  --use_hlp 1 \
+  --use_remote_hlp 1 \
+  --hlp_url http://127.0.0.1:8787 \
+  --hlp_period 5 \
+  --task "press the blue button" \
+  --max_steps 200 \
+  --use_devices 1 \
+  --llp_device cuda:0 \
+  --llp_model_path /path/to/pi0_model \
+  --dataset_repo_id /path/to/dataset_cfg \
+  --dataset_root /path/to/dataset_cfg
