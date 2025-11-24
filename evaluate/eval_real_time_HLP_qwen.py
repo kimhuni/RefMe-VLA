@@ -8,8 +8,10 @@ import logging
 
 import torch
 from transformers import (
-    Qwen2_5_VLForConditionalGeneration,
+    AutoConfig,
     AutoProcessor,
+    AutoTokenizer,
+    Qwen2_5_VLForConditionalGeneration,
     BitsAndBytesConfig,
 )
 
@@ -95,6 +97,23 @@ class HighLevelPlanner:
         self.device = cfg.device
         self.max_new_tokens = cfg.max_new_tokens
 
+        #loading merged model
+        base_dir = "/home/minji/Desktop/data/Qwen2.5-VL-7B-Instruct"
+        processor = AutoProcessor.from_pretrained(
+            base_dir, use_fast=True, trust_remote_code=True
+        )
+
+        # 2) Tokenizer: 반드시 merged에서 (훈련 vocab 그대로)
+        tokenizer = AutoTokenizer.from_pretrained(
+            cfg.base_model_path, use_fast=True, trust_remote_code=True
+        )
+
+        # 3) Config: merged에서 불러오고 vocab_size를 tokenizer에 맞춤
+        config = AutoConfig.from_pretrained(cfg.base_model_path, trust_remote_code=True)
+        if getattr(config, "vocab_size", None) != getattr(tokenizer, "vocab_size", None):
+            config.vocab_size = tokenizer.vocab_size
+
+
         bnb_config = None
         if cfg.is_qlora:
             logging.info("[HLP] Loading base model in 4-bit (QLoRA).")
@@ -107,7 +126,8 @@ class HighLevelPlanner:
         logging.info(f"[HLP] Loading base model from: {cfg.base_model_path}")
         base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             cfg.base_model_path,
-            # quantization_config=bnb_config,
+            config=config,
+            quantization_config=bnb_config,
             device_map=cfg.device,
             torch_dtype="auto",
             attn_implementation="eager",

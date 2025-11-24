@@ -201,6 +201,13 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     # --- 2) HLP / LLP config 생성 ---
+    hlp_cfg = HLPConfig(
+        base_model_path=args.hlp_model_path,
+        adapter_path=args.hlp_adapter_path,
+        is_qlora=args.hlp_use_qlora,
+        device=args.llp_device,
+    )
+
     llp_cfg = LLPConfig(
         train_dataset=DatasetConfig(
             repo_id=args.dataset_repo_id,
@@ -210,13 +217,6 @@ if __name__ == "__main__":
         use_devices=bool(args.use_devices),
         task=args.task,
         max_steps=args.max_steps,
-        device=args.llp_device,
-    )
-
-    hlp_cfg = HLPConfig(
-        base_model_path=args.hlp_model_path,
-        adapter_path=args.hlp_adapter_path,
-        is_qlora=args.hlp_use_qlora,
         device=args.llp_device,
     )
 
