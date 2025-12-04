@@ -8,7 +8,7 @@ import os
 import glob
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoProcessor
+from transformers import AutoProcessor, PreTrainedTokenizer
 from PIL import Image
 import logging
 from dataclasses import dataclass
@@ -74,6 +74,7 @@ class VlmDataset(Dataset):
             trust_remote_code=True,
             use_fast=True
         )
+        self.processor.tokenizer.padding_side = "left"
 
         # 4. 모든 샘플을 미리 전처리하여 RAM 리스트에 저장
         self.processed_samples = []
@@ -197,7 +198,24 @@ class DataCollatorForVLM:
     """
     VlmDataset에서 이미 RAM에 캐시된 텐서 딕셔너리를 받아 패딩만 수행합니다.
     """
-    tokenizer: AutoProcessor
+    # tokenizer: AutoProcessor
+    def __init__(self, tokenizer, processor):
+        self.processor = processor
+        self.tokenizer = tokenizer
+
+        # ★ 안전장치: 좌측 패딩 강제 확인
+        assert getattr(self.tokenizer, "padding_side", None) == "left", \
+            f"tokenizer.padding_side is {self.tokenizer.padding_side}, must be 'left' for Qwen2.5-VL + FA2"
+
+    def _left_pad(self, tensors, pad_value):
+        """
+        Left-pad a list of 1D torch tensors to the same length.
+        """
+        max_len = max(t.size(0) for t in tensors)
+        out = tensors[0].new_full((len(tensors), max_len), pad_value)
+        for i, t in enumerate(tensors):
+            out[i, -t.size(0):] = t  # right-align sequence => left padding
+        return out
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
 
@@ -208,16 +226,14 @@ class DataCollatorForVLM:
 
         pad_token_id = self.tokenizer.pad_token_id
 
+        if not hasattr(self, "_pad_side_logged"):
+            logger.info(f"[DataCollatorForVLM] padding_side={self.tokenizer.padding_side}")
+            self._pad_side_logged = True
+
         # 1. 텍스트 관련 텐서 패딩
-        input_ids = pad_sequence(
-            [f["input_ids"] for f in features], batch_first=True, padding_value=pad_token_id
-        )
-        labels = pad_sequence(
-            [f["labels"] for f in features], batch_first=True, padding_value=-100
-        )
-        attention_mask = pad_sequence(
-            [f["attention_mask"] for f in features], batch_first=True, padding_value=0
-        )
+        input_ids = self._left_pad([f["input_ids"] for f in features], pad_token_id)
+        labels = self._left_pad([f["labels"] for f in features], -100)
+        attention_mask = self._left_pad([f["attention_mask"] for f in features], 0)
 
         # 2. 이미지 텐서 스택
         try:

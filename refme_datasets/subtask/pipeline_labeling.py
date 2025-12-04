@@ -1,10 +1,10 @@
-
 # datasets/subtask/pipeline_labeling.py
 """
-python -m datasets.subtask.pipeline_labeling \
-  --dataset-root /path/to/piper_mix_v01_ep5 \
-  --repo-id piper_mix_v01_ep5 \
+python -m refme_datasets.subtask.pipeline_labeling.py \
+  --dataset-root /data/ghkim/press the blue button two times/lerobot_5hz \
   --state-col observation.state
+
+python -m refme_datasets.subtask.pipeline_labeling   --dataset-root /data/ghkim/press the blue button two times/lerobot_5hz   --state-col observation.state
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import VelocityLabelConfig, TASK_INDEX_TO_NUM_SUBTASKS
-from .utils import compute_velocity_from_df, find_low_speed_segments, assign_subtask_indices
-from .lerobot_io import (
+from refme_datasets.subtask.config import VelocityLabelConfig, TASK_INDEX_TO_NUM_SUBTASKS
+from refme_datasets.subtask.utils import compute_velocity_from_df, find_low_speed_segments, assign_subtask_indices
+from refme_datasets.subtask.lerobot_io import (
     load_metadata,
     iter_episodes,
     get_episode_parquet_path,
@@ -86,25 +86,32 @@ def process_single_episode(
         df.to_parquet(ep_path)
         print(f"[INFO] episode {ep_idx}: wrote subtask_index to {ep_path}")
 
-    # 5) episodes_subtask.jsonl 메타 기록
-    used_segments = segments[:num_subtasks]
-    subtasks_meta = []
-    prev_end = -1
-    for k, seg in enumerate(used_segments):
-        start = max(prev_end + 1, 0)
-        end = min(seg.frame_end, num_frames - 1)
-        subtasks_meta.append(
-            {
-                "subtask_index": k,
-                "start": int(start),
-                "end": int(end),
-                "length": int(end - start + 1),
-            }
-        )
-        prev_end = end
+    # boundary-based segmentation: use b-run start indices
+    required_boundaries = max(num_subtasks - 1, 0)
+    boundaries = sorted([seg.frame_start for seg in segments])[:required_boundaries]
 
-    # 마지막 segment 이후 남은 구간도 마지막 subtask 로 포함되어 있으니,
-    # 메타에는 "라벨링 기준 segment" 정보만 기록해둔다.
+    subtasks_meta = []
+    prev = 0
+    # subtask 0 .. num_subtasks-2
+    for k, b in enumerate(boundaries):
+        end = max(b - 1, prev)
+        subtasks_meta.append({
+            "subtask_index": k,
+            "start": int(prev),
+            "end": int(end),
+            "length": int(end - prev + 1),
+        })
+        prev = b
+
+    # final subtask: include final rest (A-option)
+    last_k = num_subtasks - 1
+    subtasks_meta.append({
+        "subtask_index": last_k,
+        "start": int(prev),
+        "end": int(num_frames - 1),
+        "length": int(num_frames - prev),
+    })
+
     record = {
         "episode_index": ep_idx,
         "task_index": task_index,
@@ -133,7 +140,7 @@ def main():
     parser.add_argument(
         "--repo-id",
         type=str,
-        required=True,
+        required=False,
         help="LeRobotDatasetMetadata 에서 사용하는 repo_id (보통 HF dataset 이름 혹은 폴더 이름).",
     )
     parser.add_argument(

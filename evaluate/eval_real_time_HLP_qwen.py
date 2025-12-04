@@ -102,11 +102,14 @@ class HighLevelPlanner:
         processor = AutoProcessor.from_pretrained(
             base_dir, use_fast=True, trust_remote_code=True
         )
+        # Force left padding to match training & FA2 expectations
+        processor.tokenizer.padding_side = "left"
+        if processor.tokenizer.pad_token_id is None:
+            # fallback: use eos as pad (common for Qwen)
+            processor.tokenizer.pad_token = processor.tokenizer.eos_token
 
-        # 2) Tokenizer: 반드시 merged에서 (훈련 vocab 그대로)
-        tokenizer = AutoTokenizer.from_pretrained(
-            cfg.base_model_path, use_fast=True, trust_remote_code=True
-        )
+        # 2) Tokenizer: use the same one from processor to keep settings in sync
+        tokenizer = processor.tokenizer
 
         # 3) Config: merged에서 불러오고 vocab_size를 tokenizer에 맞춤
         config = AutoConfig.from_pretrained(cfg.base_model_path, trust_remote_code=True)
@@ -148,8 +151,18 @@ class HighLevelPlanner:
 
         self.model.eval()
 
-        self.processor = AutoProcessor.from_pretrained(cfg.base_model_path)
-        self.tokenizer = self.processor.tokenizer
+        self.processor = processor
+        self.tokenizer = tokenizer
+        # Re-assert left padding for safety and propagate pad id to model configs
+        self.tokenizer.padding_side = "left"
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        if getattr(self.model, "generation_config", None) is not None:
+            self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+        if hasattr(self.model, "config"):
+            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
+        logging.info(f"[HLP] tokenizer padding_side={self.tokenizer.padding_side}, pad_token_id={self.tokenizer.pad_token_id}, eos_token_id={self.tokenizer.eos_token_id}")
 
         # HLP 내부 상태
         self.prev_desc: str = ""

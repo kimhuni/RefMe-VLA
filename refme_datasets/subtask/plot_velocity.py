@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
 python datasets/subtask/plot_velocity.py piper_mix_v01_ep5/data/chunk-000/episode_000000.parquet
+
+python refme_datasets/subtask/plot_velocity.py --parquet_path "/Users/ghkim/data/RefMe_data/press the blue button two times/lerobot/data/chunk-000/episode_000000.parquet" --freq-hz 30
+
 """
 
 
@@ -23,6 +26,7 @@ def compute_velocity_from_parquet(
     Returns:
         t: (T-1,) 시간축 (초 단위)
         v: (T-1,) 속도 값
+        z: (T,) z 좌표 시퀀스
     """
     df = pd.read_parquet(parquet_path)
 
@@ -32,28 +36,38 @@ def compute_velocity_from_parquet(
             f"Available columns: {list(df.columns)}"
         )
 
-    # 각 row의 observation.state 가 리스트/ndarray 라고 가정
-    states = np.stack(df[state_col].to_numpy())  # shape: (T, 7) 정도
+    # 각 row의 observation.state 가 "길이 1짜리 배열 안에 7D 배열"인 형식 처리
+    raw_states = df[state_col].to_numpy()
+    first = raw_states[0]
+
+    if isinstance(first, np.ndarray) and first.ndim == 1 and isinstance(first[0], np.ndarray):
+        # 각 row: array([array([...7D...])])
+        states = np.stack([s[0] for s in raw_states])  # (T, 7)
+    elif isinstance(first, np.ndarray):
+        # 이미 바로 1D 벡터인 경우
+        states = np.stack(raw_states)                  # (T, D)
+    else:
+        # 최후 fallback
+        states = np.stack([np.array(s) for s in raw_states])
+
     pos = states[:, :3]  # (x, y, z)만 사용
-    z = pos[:, 2]  # (T,)
+    z = pos[:, 2]        # (T,)
 
     # 위치 차이 → 속도 크기
-    dp = np.diff(pos, axis=0)  # shape: (T-1, 3)
-    dist = np.linalg.norm(dp, axis=1)  # 프레임 간 이동 거리
+    dp = np.diff(pos, axis=0)       # (T-1, 3)
+    dist = np.linalg.norm(dp, axis=1)  # (T-1,)
 
     # dt 계산: timestamp 있으면 그걸 사용, 없으면 freq_hz 기반
     if "timestamp" in df.columns:
         ts = df["timestamp"].to_numpy()
         dt = np.diff(ts)  # (T-1,)
-        # dt 가 0 이거나 이상한 값이 있을 수 있으니 최소 epsilon 적용
         eps = 1e-6
         dt = np.clip(dt, eps, None)
         v = dist / dt
-        t = ts[1:]  # 속도는 두 프레임 사이, 일단 뒤 프레임 시각에 맞추자
+        t = ts[1:]
     else:
         dt = 1.0 / freq_hz
         v = dist / dt
-        # 프레임 인덱스 기준 시간 (0, dt, 2dt, ...)
         T = len(df)
         t = np.arange(1, T) * dt
 
@@ -83,7 +97,7 @@ def main():
         description="단일 lerobot episode parquet에서 end-effector 속도를 plot하는 스크립트"
     )
     parser.add_argument(
-        "parquet_path",
+        "--parquet_path",
         type=str,
         help="episode_XXXXXX.parquet 파일 경로",
     )
@@ -107,6 +121,8 @@ def main():
     t, v, z = compute_velocity_from_parquet(
         args.parquet_path, state_col=args.state_col, freq_hz=args.freq_hz
     )
+
+    print(v)
 
     title = os.path.basename(args.parquet_path)
     plot_velocity(t, v, z, title=title)
