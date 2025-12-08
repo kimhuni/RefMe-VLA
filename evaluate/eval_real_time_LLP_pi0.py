@@ -29,7 +29,7 @@ from common.policies.pi0.modeling_pi0 import PI0Policy
 # 필요하면 프로젝트에서 쓰는 config 타입으로 교체해도 됨
 # (예: from common.configs.policy import PolicyConfig 등)
 # 여기서는 Any로 두고 parser.wrap() 에서 채워준다고 가정
-GRIPPER_EFFORT = 10000  # 프로젝트에 맞게 값 조정
+GRIPPER_EFFORT = 500  # 프로젝트에 맞게 값 조정
 
 
 # =========================
@@ -205,6 +205,9 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         exo_rs_cam.start_recording()
         table_rs_cam.start_recording()
 
+    # wait for camera to work
+    time.sleep(5)
+
     logging.info(
         colored(
             f"[LLP] Runtime initialized. "
@@ -213,6 +216,8 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
             attrs=["bold"],
         )
     )
+
+
 
     return LLPRuntimeContext(
         cfg=cfg,
