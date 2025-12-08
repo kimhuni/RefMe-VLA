@@ -98,23 +98,18 @@ class HighLevelPlanner:
         self.max_new_tokens = cfg.max_new_tokens
 
         #loading merged model
-        base_dir = "/home/minji/Desktop/data/Qwen2.5-VL-7B-Instruct"
-        processor = AutoProcessor.from_pretrained(
-            base_dir, use_fast=True, trust_remote_code=True
-        )
-        # Force left padding to match training & FA2 expectations
-        processor.tokenizer.padding_side = "left"
-        if processor.tokenizer.pad_token_id is None:
-            # fallback: use eos as pad (common for Qwen)
-            processor.tokenizer.pad_token = processor.tokenizer.eos_token
-
-        # 2) Tokenizer: use the same one from processor to keep settings in sync
-        tokenizer = processor.tokenizer
-
-        # 3) Config: merged에서 불러오고 vocab_size를 tokenizer에 맞춤
-        config = AutoConfig.from_pretrained(cfg.base_model_path, trust_remote_code=True)
-        if getattr(config, "vocab_size", None) != getattr(tokenizer, "vocab_size", None):
-            config.vocab_size = tokenizer.vocab_size
+        # try:
+        #     processor = AutoProcessor.from_pretrained(
+        #         cfg.adapter_path, use_fast=True, trust_remote_code=True
+        #     )
+        # except Exception:
+        #     processor = AutoProcessor.from_pretrained(
+        #         cfg.base_model_path, use_fast=True, trust_remote_code=True
+        #     )
+        # tokenizer = processor.tokenizer
+        # tokenizer.padding_side = "left"
+        # if tokenizer.pad_token_id is None:
+        #     tokenizer.pad_token = tokenizer.eos_token
 
 
         bnb_config = None
@@ -129,40 +124,72 @@ class HighLevelPlanner:
         logging.info(f"[HLP] Loading base model from: {cfg.base_model_path}")
         base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             cfg.base_model_path,
-            config=config,
             quantization_config=bnb_config,
             device_map=cfg.device,
             torch_dtype="auto",
             attn_implementation="eager",
         )
 
-        if cfg.is_qlora:
-            logging.info(f"[HLP] Loading adapter from: {cfg.adapter_path}")
-            model = PeftModel.from_pretrained(
-                base_model,
-                cfg.adapter_path,
-                ignore_mismatched_sizes=True,
-            )
+        processor = AutoProcessor.from_pretrained(cfg.base_model_path, use_fast=True, trust_remote_code=True)
+        tokenizer = processor.tokenizer
+        # Ensure FA2-safe batching: left padding + valid pad token
+        tokenizer.padding_side = "left"
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        print(
+            f"[eval] tokenizer padding_side={tokenizer.padding_side}, pad={tokenizer.pad_token_id}, eos={tokenizer.eos_token_id}")
 
-            logging.info("[HLP] Merging adapter into base model (memory-only).")
-            self.model = model.merge_and_unload()
-        else: # vanilla model
-            self.model = base_model
+        print(f"Loading adapter from: {cfg.adapter_path}")
+        # (3) PEFT 모델로 어댑터를 베이스 모델 위에 "덮어씌움"
+        model = PeftModel.from_pretrained(
+            base_model,
+            cfg.adapter_path,
+            ignore_mismatched_sizes=True
+        )
 
-        self.model.eval()
+        # (4) ★★★ 요청하신 "임시 병합" (메모리상에서 병합 후 PEFT 래퍼 제거) ★★★
+        print("Merging adapter into base model (in memory)...")
+        model = model.merge_and_unload()
 
-        self.processor = processor
-        self.tokenizer = tokenizer
-        # Re-assert left padding for safety and propagate pad id to model configs
-        self.tokenizer.padding_side = "left"
-        if self.tokenizer.pad_token_id is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        if getattr(self.model, "generation_config", None) is not None:
-            self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
-        if hasattr(self.model, "config"):
-            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+        # Propagate pad id to model configs to avoid generation-side surprises
+        if getattr(model, "generation_config", None) is not None:
+            model.generation_config.pad_token_id = tokenizer.pad_token_id
+        if hasattr(model, "config"):
+            model.config.pad_token_id = tokenizer.pad_token_id
 
-        logging.info(f"[HLP] tokenizer padding_side={self.tokenizer.padding_side}, pad_token_id={self.tokenizer.pad_token_id}, eos_token_id={self.tokenizer.eos_token_id}")
+        model.eval()  # 평가 모드
+
+        # target_vocab = len(tokenizer)
+        # if base_model.get_input_embeddings().weight.size(0) != target_vocab:
+        #     base_model.resize_token_embeddings(target_vocab)
+        #
+        # if cfg.is_qlora:
+        #     logging.info(f"[HLP] Loading adapter from: {cfg.adapter_path}")
+        #     model = PeftModel.from_pretrained(
+        #         base_model,
+        #         cfg.adapter_path,
+        #         ignore_mismatched_sizes=True,
+        #     )
+        #
+        #     logging.info("[HLP] Merging adapter into base model (memory-only).")
+        #     self.model = model.merge_and_unload()
+        # else: # vanilla model
+        #     self.model = base_models
+        #
+        # self.model.eval()
+        #
+        # self.processor = processor
+        # self.tokenizer = tokenizer
+        # # Re-assert left padding for safety and propagate pad id to model configs
+        # self.tokenizer.padding_side = "left"
+        # if self.tokenizer.pad_token_id is None:
+        #     self.tokenizer.pad_token = self.tokenizer.eos_token
+        # if getattr(self.model, "generation_config", None) is not None:
+        #     self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+        # if hasattr(self.model, "config"):
+        #     self.model.config.pad_token_id = self.tokenizer.pad_token_id
+        #
+        # logging.info(f"[HLP] tokenizer padding_side={self.tokenizer.padding_side}, pad_token_id={self.tokenizer.pad_token_id}, eos_token_id={self.tokenizer.eos_token_id}")
 
         # HLP 내부 상태
         self.prev_desc: str = ""

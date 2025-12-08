@@ -82,13 +82,14 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
         )
     )
 
-    # 1) LLP runtime 초기화 (로봇, 카메라, 정책, 키보드 등)
-    llp_ctx: LLPRuntimeContext = init_llp_runtime(cfg.llp)
-
-    # 2) HLP 초기화 (use_hlp=True일 때만)
+    # 1) HLP 초기화 (use_hlp=True일 때만)
     hlp: Optional[HighLevelPlanner] = None
     if cfg.use_hlp:
         hlp = HighLevelPlanner(cfg.hlp)
+
+    # 2) LLP runtime 초기화 (로봇, 카메라, 정책, 키보드 등)
+    llp_ctx: LLPRuntimeContext = init_llp_runtime(cfg.llp)
+
 
     step = 0
     done_sent_zero = False  # DONE 이후 zero posture 보냈는지 여부
