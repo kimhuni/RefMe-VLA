@@ -24,6 +24,8 @@ from common.utils.utils import (
 from peft import PeftModel
 from torchvision.transforms.functional import to_pil_image
 
+import time
+
 
 @dataclass
 class HLPConfig:
@@ -97,6 +99,8 @@ class HighLevelPlanner:
         self.device = cfg.device
         self.max_new_tokens = cfg.max_new_tokens
 
+        hlp_loading_start = time.time()
+
         bnb_config = None
         if cfg.is_qlora:
             logging.info("[HLP] Loading base model in 4-bit (QLoRA).")
@@ -112,7 +116,8 @@ class HighLevelPlanner:
             quantization_config=bnb_config,
             device_map=cfg.device,
             torch_dtype="auto",
-            attn_implementation="eager",
+            attn_implementation="flash_attention_2",
+            # attn_implementation="sdpa",
         )
 
         # processor = AutoProcessor.from_pretrained(cfg.base_model_path, use_fast=True, trust_remote_code=True)
@@ -151,6 +156,8 @@ class HighLevelPlanner:
             cfg.adapter_path,
             ignore_mismatched_sizes=True
         )
+
+        print("[HLP] model load & merging time: ", time.time() - hlp_loading_start, "sec")
 
 
         # (4) ★★★ 요청하신 "임시 병합" (메모리상에서 병합 후 PEFT 래퍼 제거) ★★★
@@ -230,6 +237,8 @@ class HighLevelPlanner:
             }
         ]
 
+        infer_start_time = time.time()
+
         prompt_string = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -266,11 +275,12 @@ class HighLevelPlanner:
         self.prev_status = parsed["status"]
 
         # 로그 (요청 2번)
-        logging.info(
+        print(
             # f"[HLP] status={parsed['status']} | subtask={parsed['subtask']} | "
             f"[HLP] status={parsed['status']} | subtask={task} | "
-            f"desc_1={parsed['desc_1']} | desc_2={parsed['desc_2']}"
+            f"\n[HLP] desc_1={parsed['desc_1']} | desc_2={parsed['desc_2']}"
+            f"\n[HLP] inference time : {time.time() - infer_start_time}"
         )
-        print("raw", output_text)
+        # print("raw", output_text)
 
         return parsed

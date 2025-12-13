@@ -172,6 +172,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         revision=getattr(cfg.train_dataset, "revision", None),
     )
 
+    llp_loading_start = time.time()
     # 4) pi0 policy 생성
     if cfg.policy is None:
         raise ValueError("[LLP] cfg.policy 가 설정되지 않았습니다.")
@@ -198,6 +199,8 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     # )
     # logging.info(res)
     policy.eval()
+
+    print("[LLP] loading time: ", time.time() - llp_loading_start, "sec")
 
     # 6) 카메라 녹화 시작 (선택)
     if cfg.use_devices:
@@ -281,15 +284,15 @@ def llp_step(
 
     t_total = time.time() - t_start
     t_action_pred = t_pred_end - t_pred_start
-
-    logging.info(
-        colored(
-            f"[LLP] step done | task={task_text} | "
-            f"t_pred={t_action_pred:.3f}s | t_total={t_total:.3f}s",
-            "yellow",
-            attrs=["bold"],
-        )
-    )
+    #
+    # logging.info(
+    #     colored(
+    #         f"[LLP] step done | task={task_text} | "
+    #         f"t_pred={t_action_pred:.3f}sec | t_total={t_total:.3f}sec",
+    #         "yellow",
+    #         attrs=["bold"],
+    #     )
+    # )
 
     return t_action_pred, t_total
 

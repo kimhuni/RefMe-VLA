@@ -108,7 +108,7 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
         # 2-2) HLP/LLP 공통용 이미지 캡처
         if cfg.llp.use_devices:
             # HLP용: global view(SIDE)=exo, WRIST=wrist
-            side_img_tensor = llp_ctx.exo_rs_cam.image_for_inference()
+            side_img_tensor = llp_ctx.table_rs_cam.image_for_inference()
             wrist_img_tensor = llp_ctx.wrist_rs_cam.image_for_inference()
         # else:
             # 오프라인/디버그용: 랜덤 이미지 (필요시 별도 util로 변경)
@@ -139,14 +139,15 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
                 llp_send_zero(llp_ctx)
                 done_sent_zero = True
 
-            t_total = time.time() - t_loop_start
-            logging.info(
-                colored(
-                    f"[MAIN][STEP {step}] status=DONE | subtask={subtask_text} | t_total={t_total:.3f}s",
-                    "cyan",
-                    attrs=["bold"],
-                )
-            )
+            # t_total = time.time() - t_loop_start
+            # logging.info(
+            #     colored(
+            #         f"[MAIN][STEP {step}] status=DONE | subtask={subtask_text}"
+            #         f"\nt_total={t_total:.3f}s",
+            #         "cyan",
+            #         attrs=["bold"],
+            #     )
+            # )
 
             step += 1
             if step > cfg.llp.max_steps:
@@ -157,15 +158,16 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
 
         done_sent_zero = False  # 다시 동작 시작하므로 플래그 리셋
 
-        # 2-6) LLP 한 step 실행
-        t_pred, t_total_llp = llp_step(llp_ctx, task_text=llp_task_input)
+        # 2-6) LLP 한 step 실행 (DONE이 아닐 때만)
+        if status != "DONE":
+            t_pred, t_total_llp = llp_step(llp_ctx, task_text=llp_task_input)
 
         t_loop_total = time.time() - t_loop_start
         logging.info(
             colored(
                 f"[MAIN][STEP {step}] status={status} | subtask={subtask_text} | "
-                f"llp_task_input={llp_task_input} | t_pred={t_pred:.3f}s | "
-                f"t_loop_total={t_loop_total:.3f}s",
+                f"[LLP] llp_task_input={llp_task_input} | t_pred={t_pred:.3f}s | "
+                f"[LLP] t_loop_total={t_loop_total:.3f}s",
                 "magenta",
                 attrs=["bold"],
             )
@@ -183,6 +185,8 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
 
 if __name__ == "__main__":
     import argparse
+
+    logging.basicConfig(level=logging.INFO)
 
     # --- 1) argparse로 꼭 필요한 옵션만 받기 ---
     p = argparse.ArgumentParser()
