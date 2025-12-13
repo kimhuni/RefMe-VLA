@@ -235,35 +235,21 @@ class DataCollatorForVLM:
         labels = self._left_pad([f["labels"] for f in features], -100)
         attention_mask = self._left_pad([f["attention_mask"] for f in features], 0)
 
-        # 2. 이미지 텐서 스택
-        try:
-            pixel_values = torch.stack([f["pixel_values"] for f in features])
-        except Exception as e:
-            shapes = [f["pixel_values"].shape for f in features]
-            logger.error(f"Failed to stack pixel_values. Shapes: {shapes}. Error: {e}")
-            # V6는 pixel_values를 캐시하므로, 여기서 크기가 다르면 치명적 에러임
-            raise e
+        # Transformers 버전에 맞게 수정
+        pixel_values = torch.cat([f["pixel_values"] for f in features], dim=0)
 
         batch = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
-            "pixel_values": pixel_values,  # [V6] pixel_values도 전달
+            "pixel_values": pixel_values,  # 이제 2D Tensor입니다.
         }
-
-        if features[0]["image_grid_thw"] is not None:
-            try:
-                concatenated_grid_thw = torch.cat([f["image_grid_thw"] for f in features], dim=0)
-                batch["image_grid_thw"] = concatenated_grid_thw
-            except Exception as e:
-                shapes = [f["image_grid_thw"].shape for f in features if f["image_grid_thw"] is not None]
-                logger.error(f"Failed to concatenate image_grid_thw. Shapes: {shapes}. Error: {e}")
-                # 이 경우, None으로 두어 모델이 처리하도록 함
-                batch["image_grid_thw"] = None
-
+        ##################
+        # 3. Grid 정보 처리 및 안전장치 추가
+        if features[0].get("image_grid_thw") is not None:
+            concatenated_grid_thw = torch.cat([f["image_grid_thw"] for f in features], dim=0)
+            batch["image_grid_thw"] = concatenated_grid_thw
         else:
-            batch["image_grid_thw"] = None  # 명시적으로 None 전달
-
-        # --- [BUG FIX] `image_grid_thw` 제거 ---
+            batch["image_grid_thw"] = None
 
         return batch
