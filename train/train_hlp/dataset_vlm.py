@@ -8,7 +8,7 @@ import os
 import glob
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoProcessor
+from transformers import AutoProcessor, PreTrainedTokenizer
 from PIL import Image
 import logging
 from dataclasses import dataclass
@@ -74,6 +74,7 @@ class VlmDataset(Dataset):
             trust_remote_code=True,
             use_fast=True
         )
+        self.processor.tokenizer.padding_side = "left"
 
         # 4. 모든 샘플을 미리 전처리하여 RAM 리스트에 저장
         self.processed_samples = []
@@ -197,7 +198,24 @@ class DataCollatorForVLM:
     """
     VlmDataset에서 이미 RAM에 캐시된 텐서 딕셔너리를 받아 패딩만 수행합니다.
     """
-    tokenizer: AutoProcessor
+    # tokenizer: AutoProcessor
+    def __init__(self, tokenizer, processor):
+        self.processor = processor
+        self.tokenizer = tokenizer
+
+        # ★ 안전장치: 좌측 패딩 강제 확인
+        assert getattr(self.tokenizer, "padding_side", None) == "left", \
+            f"tokenizer.padding_side is {self.tokenizer.padding_side}, must be 'left' for Qwen2.5-VL + FA2"
+
+    def _left_pad(self, tensors, pad_value):
+        """
+        Left-pad a list of 1D torch tensors to the same length.
+        """
+        max_len = max(t.size(0) for t in tensors)
+        out = tensors[0].new_full((len(tensors), max_len), pad_value)
+        for i, t in enumerate(tensors):
+            out[i, -t.size(0):] = t  # right-align sequence => left padding
+        return out
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
 
@@ -208,46 +226,30 @@ class DataCollatorForVLM:
 
         pad_token_id = self.tokenizer.pad_token_id
 
-        # 1. 텍스트 관련 텐서 패딩
-        input_ids = pad_sequence(
-            [f["input_ids"] for f in features], batch_first=True, padding_value=pad_token_id
-        )
-        labels = pad_sequence(
-            [f["labels"] for f in features], batch_first=True, padding_value=-100
-        )
-        attention_mask = pad_sequence(
-            [f["attention_mask"] for f in features], batch_first=True, padding_value=0
-        )
+        if not hasattr(self, "_pad_side_logged"):
+            logger.info(f"[DataCollatorForVLM] padding_side={self.tokenizer.padding_side}")
+            self._pad_side_logged = True
 
-        # 2. 이미지 텐서 스택
-        try:
-            pixel_values = torch.stack([f["pixel_values"] for f in features])
-        except Exception as e:
-            shapes = [f["pixel_values"].shape for f in features]
-            logger.error(f"Failed to stack pixel_values. Shapes: {shapes}. Error: {e}")
-            # V6는 pixel_values를 캐시하므로, 여기서 크기가 다르면 치명적 에러임
-            raise e
+        # 1. 텍스트 관련 텐서 패딩
+        input_ids = self._left_pad([f["input_ids"] for f in features], pad_token_id)
+        labels = self._left_pad([f["labels"] for f in features], -100)
+        attention_mask = self._left_pad([f["attention_mask"] for f in features], 0)
+
+        # Transformers 버전에 맞게 수정
+        pixel_values = torch.cat([f["pixel_values"] for f in features], dim=0)
 
         batch = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
-            "pixel_values": pixel_values,  # [V6] pixel_values도 전달
+            "pixel_values": pixel_values,  # 이제 2D Tensor입니다.
         }
-
-        if features[0]["image_grid_thw"] is not None:
-            try:
-                concatenated_grid_thw = torch.cat([f["image_grid_thw"] for f in features], dim=0)
-                batch["image_grid_thw"] = concatenated_grid_thw
-            except Exception as e:
-                shapes = [f["image_grid_thw"].shape for f in features if f["image_grid_thw"] is not None]
-                logger.error(f"Failed to concatenate image_grid_thw. Shapes: {shapes}. Error: {e}")
-                # 이 경우, None으로 두어 모델이 처리하도록 함
-                batch["image_grid_thw"] = None
-
+        ##################
+        # 3. Grid 정보 처리 및 안전장치 추가
+        if features[0].get("image_grid_thw") is not None:
+            concatenated_grid_thw = torch.cat([f["image_grid_thw"] for f in features], dim=0)
+            batch["image_grid_thw"] = concatenated_grid_thw
         else:
-            batch["image_grid_thw"] = None  # 명시적으로 None 전달
-
-        # --- [BUG FIX] `image_grid_thw` 제거 ---
+            batch["image_grid_thw"] = None
 
         return batch

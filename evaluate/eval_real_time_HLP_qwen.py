@@ -24,6 +24,8 @@ from common.utils.utils import (
 from peft import PeftModel
 from torchvision.transforms.functional import to_pil_image
 
+import time
+
 
 @dataclass
 class HLPConfig:
@@ -97,22 +99,7 @@ class HighLevelPlanner:
         self.device = cfg.device
         self.max_new_tokens = cfg.max_new_tokens
 
-        #loading merged model
-        base_dir = "/home/minji/Desktop/data/Qwen2.5-VL-7B-Instruct"
-        processor = AutoProcessor.from_pretrained(
-            base_dir, use_fast=True, trust_remote_code=True
-        )
-
-        # 2) Tokenizer: 반드시 merged에서 (훈련 vocab 그대로)
-        tokenizer = AutoTokenizer.from_pretrained(
-            cfg.base_model_path, use_fast=True, trust_remote_code=True
-        )
-
-        # 3) Config: merged에서 불러오고 vocab_size를 tokenizer에 맞춤
-        config = AutoConfig.from_pretrained(cfg.base_model_path, trust_remote_code=True)
-        if getattr(config, "vocab_size", None) != getattr(tokenizer, "vocab_size", None):
-            config.vocab_size = tokenizer.vocab_size
-
+        hlp_loading_start = time.time()
 
         bnb_config = None
         if cfg.is_qlora:
@@ -126,30 +113,65 @@ class HighLevelPlanner:
         logging.info(f"[HLP] Loading base model from: {cfg.base_model_path}")
         base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             cfg.base_model_path,
-            config=config,
             quantization_config=bnb_config,
             device_map=cfg.device,
             torch_dtype="auto",
-            attn_implementation="eager",
+            attn_implementation="flash_attention_2",
+            # attn_implementation="sdpa",
         )
 
-        if cfg.is_qlora:
-            logging.info(f"[HLP] Loading adapter from: {cfg.adapter_path}")
-            model = PeftModel.from_pretrained(
-                base_model,
-                cfg.adapter_path,
-                ignore_mismatched_sizes=True,
-            )
+        # processor = AutoProcessor.from_pretrained(cfg.base_model_path, use_fast=True, trust_remote_code=True)
+        # tokenizer = processor.tokenizer
+        processor = AutoProcessor.from_pretrained(cfg.adapter_path, trust_remote_code=True)
+        tokenizer = processor.tokenizer
 
-            logging.info("[HLP] Merging adapter into base model (memory-only).")
-            self.model = model.merge_and_unload()
-        else: # vanilla model
-            self.model = base_model
+        self.processor = processor
+        self.tokenizer = tokenizer
 
-        self.model.eval()
+        # pad_token을 "추가"하지 말고, "ID만" 재지정 (vocab 안 늘어남)
+        if self.tokenizer.pad_token_id is None and self.tokenizer.eos_token_id is not None:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        self.processor = AutoProcessor.from_pretrained(cfg.base_model_path)
-        self.tokenizer = self.processor.tokenizer
+        # Ensure FA2-safe batching: left padding + valid pad token
+        self.tokenizer.padding_side = "left"
+
+        print(f"[eval] tokenizer padding_side={tokenizer.padding_side}, "
+              f"pad={self.tokenizer.pad_token_id}, eos={self.tokenizer.eos_token_id}")
+
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        print(
+            f"[eval] tokenizer padding_side={self.tokenizer.padding_side}, pad={self.tokenizer.pad_token_id}, eos={self.tokenizer.eos_token_id}")
+
+        # ✅ vocab 크기 불일치시에만 임베딩 리사이즈
+        tok_len = len(self.tokenizer)
+        if getattr(base_model.config, "vocab_size", None) != tok_len:
+            base_model.resize_token_embeddings(tok_len)
+            base_model.config.vocab_size = tok_len  # 동기화
+
+        print(f"Loading adapter from: {cfg.adapter_path}")
+        # (3) PEFT 모델로 어댑터를 베이스 모델 위에 "덮어씌움"
+        model = PeftModel.from_pretrained(
+            base_model,
+            cfg.adapter_path,
+            ignore_mismatched_sizes=True
+        )
+
+        print("[HLP] model load & merging time: ", time.time() - hlp_loading_start, "sec")
+
+
+        # (4) ★★★ 요청하신 "임시 병합" (메모리상에서 병합 후 PEFT 래퍼 제거) ★★★
+        print("Merging adapter into base model (in memory)...")
+        model = model.merge_and_unload()
+
+        # Propagate pad id to model configs to avoid generation-side surprises
+        if getattr(model, "generation_config", None) is not None:
+            model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+        if hasattr(model, "config"):
+            model.config.pad_token_id = self.tokenizer.pad_token_id
+
+        self.model = model
+        model.eval()  # 평가 모드
 
         # HLP 내부 상태
         self.prev_desc: str = ""
@@ -215,6 +237,8 @@ class HighLevelPlanner:
             }
         ]
 
+        infer_start_time = time.time()
+
         prompt_string = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -251,10 +275,12 @@ class HighLevelPlanner:
         self.prev_status = parsed["status"]
 
         # 로그 (요청 2번)
-        logging.info(
+        print(
             # f"[HLP] status={parsed['status']} | subtask={parsed['subtask']} | "
             f"[HLP] status={parsed['status']} | subtask={task} | "
-            f"desc_1={parsed['desc_1']} | desc_2={parsed['desc_2']}"
+            f"\n[HLP] desc_1={parsed['desc_1']} | desc_2={parsed['desc_2']}"
+            f"\n[HLP] inference time : {time.time() - infer_start_time}"
         )
+        # print("raw", output_text)
 
         return parsed

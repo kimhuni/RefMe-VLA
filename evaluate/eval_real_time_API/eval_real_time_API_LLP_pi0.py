@@ -29,7 +29,7 @@ from common.policies.pi0.modeling_pi0 import PI0Policy
 # 필요하면 프로젝트에서 쓰는 config 타입으로 교체해도 됨
 # (예: from common.configs.policy import PolicyConfig 등)
 # 여기서는 Any로 두고 parser.wrap() 에서 채워준다고 가정
-GRIPPER_EFFORT = 10000  # 프로젝트에 맞게 값 조정
+GRIPPER_EFFORT = 2500  # 프로젝트에 맞게 값 조정
 
 
 # =========================
@@ -90,7 +90,7 @@ class LLPRuntimeContext:
     piper: Any
     table_rs_cam: Any
     wrist_rs_cam: Any
-    exo_rs_cam: Any
+    # exo_rs_cam: Any
 
     keyboard_event: Dict[str, Any]
 
@@ -152,7 +152,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     if cfg.use_devices:
         piper, cam = init_devices(cfg)
         wrist_rs_cam = cam["wrist_rs_cam"]
-        exo_rs_cam = cam["exo_rs_cam"]
+        # exo_rs_cam = cam["exo_rs_cam"]
         table_rs_cam = cam["table_rs_cam"]
 
         listener, event, _task_state = init_keyboard_listener()
@@ -176,11 +176,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     # 4) pi0 policy 생성
     if cfg.policy is None:
         raise ValueError("[LLP] cfg.policy 가 설정되지 않았습니다.")
-    # pi_cfg = PI0Config
-    # policy = PI0Policy(
-    #     config=pi_cfg,
-    #     dataset_stats=train_dataset_meta
-    # )
+
 
     logging.info("Making policy.")
 
@@ -205,8 +201,10 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     # 6) 카메라 녹화 시작 (선택)
     if cfg.use_devices:
         wrist_rs_cam.start_recording()
-        exo_rs_cam.start_recording()
+        # exo_rs_cam.start_recording()
         table_rs_cam.start_recording()
+
+    time.sleep(5)
 
     logging.info(
         colored(
@@ -224,7 +222,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         piper=piper,
         table_rs_cam=table_rs_cam,
         wrist_rs_cam=wrist_rs_cam,
-        exo_rs_cam=exo_rs_cam,
+        # exo_rs_cam=exo_rs_cam,
         keyboard_event=event,
     )
 

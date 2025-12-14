@@ -1,11 +1,11 @@
 # 🚀 evaluation.py
 # 이 스크립트는 훈련된 모델의 성능을 .jsonl 데이터셋과 비교하여 평가합니다.
 """
-CUDA_VISIBLE_DEVICES=0 python evaluate/eval_HLP.py \
+CUDA_VISIBLE_DEVICES=3 python evaluate/eval_HLP.py \
     --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
-    --adapter_path /result/ghkim/HLP_qwen_2.5_7b_LoRA_r16_press_the_blue_button_ep60_1109_RAM_test/checkpoint-2000 \
+    --adapter_path /result/ghkim/HLP_qwen_2.5_7b_QLoRA_r16_press_the_blue_button_ep60_1208/checkpoint-2000 \
     --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-001.jsonl \
-    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_001_evaluation.jsonl \
+    --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_1208_2k/shards/chunk_001_evaluation.jsonl \
     --is_qlora True
 
 CUDA_VISIBLE_DEVICES=2 python evaluate/eval_HLP.py \
@@ -15,6 +15,7 @@ CUDA_VISIBLE_DEVICES=2 python evaluate/eval_HLP.py \
     --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_RAM_test_2k/shards/chunk_000_evaluation.jsonl \
     --is_qlora False
 
+CUDA_VISIBLE_DEVICES=2 python evaluate/eval_HLP.py     --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct     --adapter_path /result/ghkim/HLP_qwen_2.5_7b_QLoRA_r16_press_the_blue_button_ep60_1205/checkpoint-2000     --dataset_file /data/ghkim/piper_press_the_blue_button_ep60/gpt-5-mini/eval_final/shards/chunk-001.jsonl     --output_file /data/ghkim/piper_press_the_blue_button_ep60/eval_qwen_LoRA_1205_2k/shards/chunk_001_evaluation.jsonl     --is_qlora True
 """
 
 # 🚀 evaluation.py
@@ -79,14 +80,19 @@ def run_evaluation(
     base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         base_model_path,
         quantization_config=bnb_config,  # 4비트 로드
-        device_map=device,
+        device_map="auto",
         torch_dtype="auto",
         attn_implementation="eager",
     )
 
     # (2) 프로세서는 베이스 모델 경로에서 로드
-    processor = AutoProcessor.from_pretrained(base_model_path)
+    processor = AutoProcessor.from_pretrained(base_model_path, use_fast=True, trust_remote_code=True)
     tokenizer = processor.tokenizer
+    # Ensure FA2-safe batching: left padding + valid pad token
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    print(f"[eval] tokenizer padding_side={tokenizer.padding_side}, pad={tokenizer.pad_token_id}, eos={tokenizer.eos_token_id}")
 
     print(f"Loading adapter from: {adapter_path}")
     # (3) PEFT 모델로 어댑터를 베이스 모델 위에 "덮어씌움"
@@ -97,8 +103,14 @@ def run_evaluation(
     )
 
     # (4) ★★★ 요청하신 "임시 병합" (메모리상에서 병합 후 PEFT 래퍼 제거) ★★★
-    print("Merging adapter into base model (in memory)...")
-    model = model.merge_and_unload()
+    # print("Merging adapter into base model (in memory)...")
+    # model = model.merge_and_unload()
+
+    # Propagate pad id to model configs to avoid generation-side surprises
+    if getattr(model, "generation_config", None) is not None:
+        model.generation_config.pad_token_id = tokenizer.pad_token_id
+    if hasattr(model, "config"):
+        model.config.pad_token_id = tokenizer.pad_token_id
 
     model.eval()  # 평가 모드
 
@@ -267,7 +279,7 @@ if __name__ == "__main__":
 
     # [추가] 훈련 방식에 따라 설정
     parser.add_argument("--is_qlora", type=bool, default=False,
-                        help="Set this if you trained with *standard* LoRA (not QLoRA)")
+                        help="Set True if you trained with QLoRA (loads base in 4-bit before merging)")
 
     args = parser.parse_args()
 

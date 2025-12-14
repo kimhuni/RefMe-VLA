@@ -170,9 +170,10 @@ def main():
 
         # [추가 수정] 로그에 나온 경고(Warning)도 함께 수정합니다.
         # `torch_dtype` is deprecated! Use `dtype` instead!
-        dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
+        torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
 
         attn_implementation="flash_attention_2",
+        # attn_implementation="eager",
         trust_remote_code=True  # Qwen 계열은 보통 이게 필요합니다.
     )
 
@@ -185,8 +186,19 @@ def main():
     )
     tokenizer = processor.tokenizer
 
+    tokenizer.padding_side = "left"
+    processor.tokenizer.padding_side = "left"
+    # 🔒 add_special_tokens 이후에도 다시 강제 (헬퍼가 속성을 리셋할 수 있음)
+    tokenizer.truncation_side = "left"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model.config.pad_token_id = tokenizer.pad_token_id
+
     # 5. Add Special Tokens and Resize Embeddings
     add_special_tokens(tokenizer, model)
+
+    # processor가 정확히 동일 토크나이저를 쓰도록 보장 (DDP에서도 안전)
+    processor.tokenizer = tokenizer
 
     # 6. [Modified] Conditionally setup PEFT (LoRA/QLoRA)
     if model_args.use_lora or model_args.use_qlora:
@@ -235,16 +247,18 @@ def main():
     )
 
     # 9. Initialize Data Collator
-    data_collator = DataCollatorForVLM(tokenizer=tokenizer)
-
+    data_collator = DataCollatorForVLM(
+        processor=processor,  # ✅ 같은 processor 강제 전달
+        tokenizer=tokenizer
+    )
 
     # 11. Initialize Trainer
     trainer = Trainer(
         model=model,
-        args=training_args,  # All args (steps, batch_size, logging, etc.) are in here
+        args=training_args,
         train_dataset=train_dataset,
         data_collator=data_collator,
-        #tokenizer=tokenizer
+        processing_class=processor,
     )
 
     # 12. [Added] Log custom parameters to W&B (if enabled)

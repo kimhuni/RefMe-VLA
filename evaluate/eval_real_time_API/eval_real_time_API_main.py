@@ -56,12 +56,6 @@ class EvalRealTimeMainConfig:
 # ---------------------------
 
 def _pil_from_any(x) -> Image.Image:
-    """
-    Tensor/ndarray/PIL을 모두 PIL Image(RGB)로 변환.
-    - torch.Tensor: (C,H,W) or (H,W,C), [0,1] or [0,255]
-    - numpy.ndarray: (H,W,C) uint8 / float
-    - PIL.Image.Image: 그대로
-    """
     try:
         import torch
         _has_torch = True
@@ -71,22 +65,33 @@ def _pil_from_any(x) -> Image.Image:
     if isinstance(x, Image.Image):
         return x.convert("RGB")
 
+    # torch.Tensor -> numpy
     if _has_torch and isinstance(x, torch.Tensor):
         t = x.detach().cpu()
+        # (1,C,H,W) -> (C,H,W)
+        if t.ndim == 4 and t.shape[0] == 1:
+            t = t.squeeze(0)
+        # (C,H,W) -> (H,W,C)
         if t.ndim == 3 and t.shape[0] in (1, 3):
-            # (C,H,W) -> (H,W,C)
             t = t.permute(1, 2, 0)
-        t = t.numpy()
-        x = t
+        x = t.numpy()
 
     if isinstance(x, np.ndarray):
         arr = x
+        # (1,H,W,C) -> (H,W,C)
+        if arr.ndim == 4 and arr.shape[0] == 1:
+            arr = arr[0]
+        # (C,H,W) -> (H,W,C)
+        if arr.ndim == 3 and arr.shape[0] in (1, 3) and arr.shape[-1] not in (1, 3):
+            arr = np.transpose(arr, (1, 2, 0))
+        # float -> uint8
         if arr.dtype != np.uint8:
-            # normalize to [0,255]
-            _min, _max = float(arr.min()), float(arr.max())
-            if _max > _min:
-                arr = (arr - _min) / (_max - _min)
-            arr = (arr * 255.0).clip(0, 255).astype(np.uint8)
+            amin, amax = float(arr.min()), float(arr.max())
+            if amax <= 1.0:
+                arr = (arr * 255.0).clip(0, 255).astype(np.uint8)
+            else:
+                arr = arr.clip(0, 255).astype(np.uint8)
+        # 흑백 -> 3채널
         if arr.ndim == 2:
             arr = np.stack([arr] * 3, axis=-1)
         if arr.shape[-1] == 1:
@@ -94,6 +99,7 @@ def _pil_from_any(x) -> Image.Image:
         return Image.fromarray(arr, mode="RGB")
 
     raise TypeError(f"Unsupported image type: {type(x)}")
+
 
 
 def _pil_to_b64(img: Image.Image) -> str:
@@ -182,7 +188,7 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
 
         # 2-1) 이미지 캡처
         if cfg.llp.use_devices:
-            side_img_tensor = llp_ctx.exo_rs_cam.image_for_inference()
+            side_img_tensor = llp_ctx.table_rs_cam.image_for_inference()
             wrist_img_tensor = llp_ctx.wrist_rs_cam.image_for_inference()
         else:
             # 디바이스 미사용 모드라면, 여기서 오프라인 이미지 공급 로직을 넣으세요.
@@ -195,6 +201,7 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
         if cfg.use_hlp:
             if step % max(1, cfg.hlp_period) == 0:
                 if cfg.use_remote_hlp:
+                    print("sending hlp request")
                     # 원격 호출
                     side_pil = _pil_from_any(side_img_tensor)
                     wrist_pil = _pil_from_any(wrist_img_tensor)
@@ -207,6 +214,7 @@ def eval_real_time_main(cfg: EvalRealTimeMainConfig):
                             side_pil=side_pil,
                             wrist_pil=wrist_pil,
                         )
+                        print("raw_output: ", out)
                         status = out.get("status", "UNCERTAIN")
                         subtask_text = out.get("subtask") or cfg.llp.task
                         desc1 = out.get("desc_1", "")

@@ -29,7 +29,7 @@ from common.policies.pi0.modeling_pi0 import PI0Policy
 # 필요하면 프로젝트에서 쓰는 config 타입으로 교체해도 됨
 # (예: from common.configs.policy import PolicyConfig 등)
 # 여기서는 Any로 두고 parser.wrap() 에서 채워준다고 가정
-GRIPPER_EFFORT = 10000  # 프로젝트에 맞게 값 조정
+GRIPPER_EFFORT = 500  # 프로젝트에 맞게 값 조정
 
 
 # =========================
@@ -172,6 +172,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         revision=getattr(cfg.train_dataset, "revision", None),
     )
 
+    llp_loading_start = time.time()
     # 4) pi0 policy 생성
     if cfg.policy is None:
         raise ValueError("[LLP] cfg.policy 가 설정되지 않았습니다.")
@@ -199,11 +200,16 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     # logging.info(res)
     policy.eval()
 
+    print("[LLP] loading time: ", time.time() - llp_loading_start, "sec")
+
     # 6) 카메라 녹화 시작 (선택)
     if cfg.use_devices:
         wrist_rs_cam.start_recording()
         exo_rs_cam.start_recording()
         table_rs_cam.start_recording()
+
+    # wait for camera to work
+    time.sleep(5)
 
     logging.info(
         colored(
@@ -213,6 +219,8 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
             attrs=["bold"],
         )
     )
+
+
 
     return LLPRuntimeContext(
         cfg=cfg,
@@ -276,15 +284,15 @@ def llp_step(
 
     t_total = time.time() - t_start
     t_action_pred = t_pred_end - t_pred_start
-
-    logging.info(
-        colored(
-            f"[LLP] step done | task={task_text} | "
-            f"t_pred={t_action_pred:.3f}s | t_total={t_total:.3f}s",
-            "yellow",
-            attrs=["bold"],
-        )
-    )
+    #
+    # logging.info(
+    #     colored(
+    #         f"[LLP] step done | task={task_text} | "
+    #         f"t_pred={t_action_pred:.3f}sec | t_total={t_total:.3f}sec",
+    #         "yellow",
+    #         attrs=["bold"],
+    #     )
+    # )
 
     return t_action_pred, t_total
 

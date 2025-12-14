@@ -11,7 +11,7 @@ class VelocityLabelConfig:
     속도 기반 subtask 라벨링을 위한 하이퍼파라미터 집합.
     """
     # 속도 임계값 (저속 판단)
-    tau_low: float = 0.01
+    tau_low: float = 100
 
     # 처음 몇 초는 boundary 후보에서 제외 (초기 노이즈/출발 구간 무시)
     ignore_first_sec: float = 1.0
@@ -29,9 +29,17 @@ class VelocityLabelConfig:
 # task_index → subtask 개수 매핑
 # (실제 프로젝트에서 task_index / task 문자열에 맞게 조정하면 됨)
 TASK_INDEX_TO_NUM_SUBTASKS: dict[int, int] = {
-    0: 3,   # press the blue button
-    1: 6,   # press the blue button two times
-    2: 9,   # press the blue button three times
-    3: 12,  # press the blue button four times
+    0: 2,   # press the blue button
+    1: 3,   # press the blue button two times
+    2: 5,   # press the blue button three times
+    3: 7,  # press the blue button four times
     4: 6,   # press red, green, blue in order
+}
+
+tasks_dict = {
+    '0' : "press the blue button",
+    '1': "press the blue button two times",
+    '2': "press the blue button three times",
+    '3': "press the blue button four times",
+    '4' : "press the red, green, blue buttons in order",
 }

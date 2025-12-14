@@ -10,6 +10,6 @@ python -m evaluate.eval_real_time_API.eval_real_time_API_main \
   --max_steps 200 \
   --use_devices 1 \
   --llp_device "cuda" \
-  --llp_model_path "${HLP_BASE_MODEL}" \
+  --llp_model_path "${LLP_BASE_MODEL}" \
   --dataset_repo_id "${LLP_DATASET}" \
   --dataset_root "${LLP_DATASET}"

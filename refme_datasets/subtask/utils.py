@@ -1,5 +1,3 @@
-# datasets/subtask/utils.py
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +6,7 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-from .config import VelocityLabelConfig
+from refme_datasets.subtask.config import VelocityLabelConfig
 
 
 @dataclass
@@ -159,57 +157,21 @@ def assign_subtask_indices(
     low_speed_segments: List[LowSpeedSegment],
     num_subtasks: int,
 ) -> np.ndarray:
-    """
-    low-speed segment 리스트와 원하는 subtask 개수를 받아,
-    각 frame (0 ~ num_frames-1)에 대한 subtask_index 배열을 생성한다.
-
-    설계:
-    - low_speed_segments 는 시간 순으로 정렬되어 있다고 가정한다.
-    - 각 segment 는 "해당 subtask 의 끝부분(정지 포함)" 이라고 본다.
-    - subtask k (0-base) 의 범위는:
-        k==0: [0, seg[0].frame_end]
-        k>0: [seg[k-1].frame_end + 1, seg[k].frame_end]
-    - subtask 개수는 num_subtasks로 고정하고,
-        - low_speed_segments 가 num_subtasks 개 이상이면,
-          앞에서부터 num_subtasks 개만 사용하고,
-          나머지 프레임(마지막 seg 이후)은 전부 마지막 subtask로 라벨링한다.
-        - low_speed_segments 가 num_subtasks 보다 적으면 현재는 에러를 던진다
-          (이런 episode는 나중에 수동 검수 대상으로 따로 모아도 좋음).
-
-    Returns:
-        subtask_index: shape (num_frames,) 의 int 배열. 0 ~ num_subtasks-1.
-    """
     if num_subtasks <= 0:
         raise ValueError(f"num_subtasks must be > 0, got {num_subtasks}.")
-    if num_frames <= 0:
-        raise ValueError(f"num_frames must be > 0, got {num_frames}.")
-
-    if len(low_speed_segments) < num_subtasks:
+    required = num_subtasks - 1
+    if len(low_speed_segments) < required:
         raise RuntimeError(
             f"Not enough low-speed segments ({len(low_speed_segments)}) "
             f"for num_subtasks={num_subtasks}."
         )
-
-    # 시간 순 정렬
     segments = sorted(low_speed_segments, key=lambda s: s.frame_start)
-    segments = segments[:num_subtasks]  # 앞에서부터 num_subtasks 개만 사용
-
+    boundaries = [seg.frame_start for seg in segments[:required]]
     subtask_idx = np.zeros(num_frames, dtype=np.int32)
-
-    # 앞에서부터 subtask 라벨링
-    prev_end = -1
-    for k, seg in enumerate(segments):
-        start = max(prev_end + 1, 0)
-        end = min(seg.frame_end, num_frames - 1)
-        if end < start:
-            # 비정상인 경우 (예: segment가 episode 끝 밖으로 나갔을 때)
-            continue
-        subtask_idx[start:end + 1] = k
-        prev_end = end
-
-    # 마지막 segment 이후 남은 프레임은 전부 마지막 subtask로 라벨링
-    last_label = num_subtasks - 1
-    if prev_end < num_frames - 1:
-        subtask_idx[prev_end + 1:] = last_label
-
+    prev = 0
+    for k, b in enumerate(boundaries):
+        end = max(b - 1, prev)
+        subtask_idx[prev:end+1] = k
+        prev = b
+    subtask_idx[prev:] = num_subtasks - 1
     return subtask_idx
