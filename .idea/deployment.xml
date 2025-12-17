@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="mango (3)" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" serverName="mango (4)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="mango (2)">
         <serverdata>
@@ -10,6 +10,13 @@
         </serverdata>
       </paths>
       <paths name="mango (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/ghkim/codes/RefMe-VLA" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="mango (4)">
         <serverdata>
           <mappings>
             <mapping deploy="/home/ghkim/codes/RefMe-VLA" local="$PROJECT_DIR$" />

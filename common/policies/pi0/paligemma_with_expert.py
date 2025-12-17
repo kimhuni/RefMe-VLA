@@ -224,8 +224,21 @@ class PaliGemmaWithExpertModel(PreTrainedModel):
     def embed_image(self, image: torch.Tensor):
         return self.paligemma.get_image_features(image)
 
-    def embed_language_tokens(self, tokens: torch.Tensor):
-        return self.paligemma.language_model.model.embed_tokens(tokens)
+    def embed_language_tokens(self, tokens):
+        # PEFT(PeftModel)로 감싸져도 안정적으로 동작하는 방법:
+        lm = self.paligemma.language_model
+
+        # 1) 가장 안전한 HF 표준 API
+        if hasattr(lm, "get_input_embeddings"):
+            emb = lm.get_input_embeddings()
+            if emb is not None:
+                return emb(tokens)
+
+        # 2) fallback (구조가 다른 경우)
+        try:
+            return lm.model.embed_tokens(tokens)
+        except Exception:
+            return lm.model.model.embed_tokens(tokens)
 
     # TODO: break down this huge forward into modules or functions
     def forward(

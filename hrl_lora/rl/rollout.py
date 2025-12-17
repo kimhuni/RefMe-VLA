@@ -21,6 +21,15 @@ class StepRecord:
 class RolloutBuffer:
     def __init__(self):
         self.steps: List[StepRecord] = []
+        # Rollout-level stats (filled by RolloutCollector.collect)
+        self.reward_sum: float = 0.0
+        self.reward_mean: float = 0.0
+        self.reward_fit_mean: float = 0.0
+        self.reward_cons_mean: float = 0.0
+        self.switch_rate: float = 0.0
+        # Routing traces
+        self.step_experts: List[int] = []           # flattened expert ids over all steps
+        self.episode_experts: List[List[int]] = []  # per-episode expert id sequences
 
     def add(self, *, obs: torch.Tensor, act: torch.Tensor, logp: torch.Tensor, val: torch.Tensor, reward: torch.Tensor, done: torch.Tensor) -> None:
         # ensure 1D tensors
@@ -95,8 +104,16 @@ class RolloutCollector:
         """
         buf = RolloutBuffer()
 
+        total_steps = 0
+        sum_reward = 0.0
+        sum_r_fit = 0.0
+        sum_r_cons = 0.0
+        switch_count = 0
+
         for ep_chunks in episodes:
             prev_action: Optional[int] = None
+            ep_seq: List[int] = []
+            ep_switches = 0
 
             for chunk in ep_chunks:
                 # Router obs: pooled image embed + time
@@ -107,6 +124,10 @@ class RolloutCollector:
 
                 act, logp, val = self.router.act(obs)
                 expert_id = int(act.item())
+
+                # record routing decision
+                buf.step_experts.append(expert_id)
+                ep_seq.append(expert_id)
 
                 # switch penalty
                 switched = (prev_action is not None) and (expert_id != prev_action)
@@ -126,6 +147,14 @@ class RolloutCollector:
                 r_cons = (-self.lambda_cons) * (1.0 if switched else 0.0)
                 reward = r_fit + r_cons
 
+                # stats accumulation (Python floats)
+                total_steps += 1
+                sum_reward += float(reward.item())
+                sum_r_fit += float(r_fit.item())
+                sum_r_cons += float(r_cons)
+                if switched:
+                    switch_count += 1
+
                 # supervised update (chunk마다 1회)
                 _ = self.llp.supervised_update_one_step(chunk.batch, precomputed_loss=loss)
 
@@ -142,5 +171,22 @@ class RolloutCollector:
 
                 if bool(chunk.done.item()):
                     prev_action = None
+            # end of episode: save sequence
+            if len(ep_seq) > 0:
+                buf.episode_experts.append(ep_seq)
+
+        if total_steps > 0:
+            buf.reward_sum = float(sum_reward)
+            buf.reward_mean = float(sum_reward / total_steps)
+            buf.mean_reward = buf.reward_mean
+            buf.reward_fit_mean = float(sum_r_fit / total_steps)
+            buf.reward_cons_mean = float(sum_r_cons / total_steps)
+            buf.switch_rate = float(switch_count / total_steps)
+        else:
+            buf.reward_sum = 0.0
+            buf.reward_mean = 0.0
+            buf.reward_fit_mean = 0.0
+            buf.reward_cons_mean = 0.0
+            buf.switch_rate = 0.0
 
         return buf

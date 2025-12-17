@@ -88,7 +88,24 @@ class PPOAgent:
                 mb_adv = adv[mb_idx]
                 mb_ret = ret[mb_idx]
 
-                logp, entropy, value = self.router.evaluate_actions(mb_obs, mb_act)
+                # Recompute current-policy quantities with gradient.
+                # NOTE: Some router implementations provide evaluate_actions() but may detach outputs.
+                out = self.router(mb_obs)
+                if isinstance(out, tuple) and len(out) == 2:
+                    logits, value = out
+                elif isinstance(out, dict):
+                    logits = out.get("logits")
+                    value = out.get("value") if "value" in out else out.get("values")
+                else:
+                    raise TypeError(f"Unexpected router output type: {type(out)}")
+
+                dist = torch.distributions.Categorical(logits=logits)
+                logp = dist.log_prob(mb_act)
+                entropy = dist.entropy()
+
+                # value can be (B,) or (B,1)
+                if value.dim() == 2 and value.shape[-1] == 1:
+                    value = value.squeeze(-1)
 
                 ratio = torch.exp(logp - mb_logp_old)
                 unclipped = ratio * mb_adv
@@ -112,7 +129,7 @@ class PPOAgent:
                 total_loss_acc += loss.item()
                 pol_loss_acc += loss_policy.item()
                 val_loss_acc += loss_value.item()
-                ent_acc += torch.mean(entropy).item()
+                ent_acc += entropy.mean().item()
                 kl_acc += approx_kl
                 clipfrac_acc += clipfrac
                 num_minibatches_total += 1

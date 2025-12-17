@@ -14,10 +14,10 @@ except Exception:
     ACTION = "action"
     OBS_ROBOT = "observation.state"
 
-try:
-    from common.datasets.lerobot_dataset import LeRobotDataset
-except Exception:
-    from lerobot_dataset import LeRobotDataset  # type: ignore
+#try:
+from common.datasets.lerobot_dataset import LeRobotDataset
+#except Exception:
+#    from lerobot_dataset_dataset import LeRobotDataset  # type: ignore
 
 try:
     from common.datasets.utils import get_delta_indices
@@ -49,24 +49,25 @@ def make_chunked_lerobot_dataset(
     root: Optional[str],
     episodes: Optional[List[int]],
     image_keys: List[str],
-    chunk_size: int,
+    router_stride: int,
+    action_horizon: int,
     *,
     action_key: str = ACTION,
     state_key: str = OBS_ROBOT,
     download_videos: bool = True,
 ) -> LeRobotDataset:
-    """Create a LeRobotDataset that returns (single) images + (chunk_size) actions via delta indices.
+    """Create a LeRobotDataset that returns (single) images + (action_horizon) actions via delta indices.
 
     Images: delta=[0]
-    Actions: delta=[0,1,...,chunk_size-1] in frames (converted to timestamps)
+    Actions: delta=[0..action_horizon-1] in frames (converted to timestamps)
 
-    Note: We set delta_indices after dataset init to avoid guessing fps.
+    Note: router_stride is used by EpisodeChunkDataLoader to determine chunk anchor steps, not delta indices.
     """
     ds = LeRobotDataset(repo_id=repo_id, root=root, episodes=episodes, split="train", download_videos=download_videos)
 
     dt = 1.0 / float(ds.fps)
     # Delta timestamps in seconds
-    action_deltas = [i * dt for i in range(chunk_size)]
+    action_deltas = [i * dt for i in range(action_horizon)]
     img_deltas = [0.0]
 
     # Only action uses a horizon. State should remain a single vector at the anchor index.
@@ -93,12 +94,13 @@ class EpisodeChunkDataLoader:
         - each inner list is time-ordered chunks for that episode
 
     This is NOT a PyTorch DataLoader; it is a light iterator to preserve episode order.
+    Chunks are yielded at steps spaced by router_stride.
     """
 
     def __init__(
         self,
         dataset: LeRobotDataset,
-        chunk_size: int,
+        router_stride: int,
         episodes_per_update: int,
         shuffle_episodes: bool = True,
         seed: int = 0,
@@ -106,7 +108,7 @@ class EpisodeChunkDataLoader:
         ddp_world_size: int = 1,
     ):
         self.dataset = dataset
-        self.chunk_size = chunk_size
+        self.router_stride = router_stride
         self.episodes_per_update = episodes_per_update
         self.shuffle_episodes = shuffle_episodes
         self.seed = seed
@@ -150,8 +152,15 @@ class EpisodeChunkDataLoader:
         if ep_len <= 0:
             return []
 
-        denom = max(ep_len - 1, 1)
-        chunk_starts = list(range(ep_start, ep_end, self.chunk_size))
+        action_horizon = len(self.dataset.delta_indices.get(ACTION, [0]))
+        if action_horizon < 1:
+            action_horizon = 1
+
+        last_anchor_exclusive = ep_end - (action_horizon - 1)
+        if last_anchor_exclusive <= ep_start:
+            return []
+
+        chunk_starts = list(range(ep_start, last_anchor_exclusive, self.router_stride))
         chunks: List[ChunkBatch] = []
 
         for i, idx in enumerate(chunk_starts):
@@ -161,6 +170,7 @@ class EpisodeChunkDataLoader:
             batch_item: Dict[str, Any] = {k: _ensure_batch_dim(v) for k, v in item.items()}
 
             # time progress scalar (B,)
+            denom = max(ep_len - 1, 1)
             prog = torch.tensor([(idx - ep_start) / denom], dtype=torch.float32)
 
             # done flag (B,)
@@ -172,6 +182,8 @@ class EpisodeChunkDataLoader:
                 "ep_end": ep_end,
                 "anchor_index": idx,
                 "chunk_idx": i,
+                "router_stride": self.router_stride,
+                "action_horizon": action_horizon,
             }
 
             chunks.append(ChunkBatch(batch=batch_item, time_progress=prog, done=done, meta=meta))
