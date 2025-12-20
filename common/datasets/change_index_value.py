@@ -11,3 +11,4 @@ def change_episode_task_index(index: int):
 if __name__ == "__main__":
     for i in range(120):
         change_episode_task_index(i)
+

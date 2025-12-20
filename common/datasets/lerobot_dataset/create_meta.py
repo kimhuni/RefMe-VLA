@@ -4,6 +4,7 @@ from tqdm import tqdm
 from datasets import load_dataset
 import cv2
 import numpy as np
+from task_config import TASKS_DICT
 
 # from custom_scripts.common.constants import META_INFO_TEMPLATE, META_STATS_TEMPLATE
 
@@ -433,16 +434,17 @@ def create_meta(root_dir, episodes):
 
     print("dataset_root_dir: ", root_dir)
 
-    tasks_dict = {
-        '0' : "press the red button",
-        '1' : "press the green button",
-        '2' : "press the blue button",
-        # '1' : "press the blue button two times",
-        # '2' : "press the blue button three times",
-        # '3' : "press the blue button four times",
-        # '4' : "press the red, green, blue buttons in order",
-        '5' : "wipe the window with towel",
-    }
+    tasks_dict = TASKS_DICT
+    #     {
+    #     '0' : "press the red button",
+    #     '1' : "press the green button",
+    #     '2' : "press the blue button",
+    #     # '1' : "press the blue button two times",
+    #     # '2' : "press the blue button three times",
+    #     # '3' : "press the blue button four times",
+    #     # '4' : "press the red, green, blue buttons in order",
+    #     '5' : "wipe the window with towel",
+    # }
 
     total_frames = 0
 
@@ -636,8 +638,8 @@ if __name__ == "__main__":
     #episodes = 20
     #create_meta(root_dir, episodes)
 
-    root_dir = "/data/ghkim/press_the_RGB_button_ep60"
-    episodes = 60
+    root_dir = "/data/ghkim/press_the_RGB_button_ep150"
+    episodes = 150
     create_meta(root_dir, episodes)
 
     # root_dir = "/data/ghkim/press the green button/lerobot_5hz"

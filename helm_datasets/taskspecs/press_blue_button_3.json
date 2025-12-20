@@ -1,0 +1,18 @@
+{
+  "task_id": "press_blue_button_3",
+  "task_text": "press the blue button three times",
+  "max_inter": 1,
+  "max_intra": 3,
+  "command_grid": [
+    ["press_button", "press_button", "press_button", "done"],
+    ["done"]
+  ],
+  "progress_grid": [
+    ["0/3 Pressed", "1/3 Pressed", "2/3 Pressed", "3/3 Pressed"],
+    ["None"]
+  ],
+  "world_state_grid": [
+    "None",
+    "total_count: 3"
+  ]
+}

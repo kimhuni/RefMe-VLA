@@ -1,0 +1,25 @@
+{
+  "task_id": "press_blue_button_2+1",
+  "task_text": [
+    "press the blue button two times",
+    "press the blue button three times in total"
+  ],
+  "episode_filters" : [
+    {"tasks": "press the blue button"},
+    {"tasks": "press the blue button"}
+  ],
+  "max_inter": 1,
+  "max_intra": [2, 1],
+  "command_grid": [
+    ["press_button", "press_button", "done"],
+    ["press_button", "done"]
+  ],
+  "progress_grid": [
+    ["0/2 Pressed", "1/2 Pressed", "2/2 Pressed"],
+    ["0/1 Pressed", "1/1 Pressed"]
+  ],
+  "world_state_grid": [
+    "None",
+    "total_count: 2"
+  ]
+}

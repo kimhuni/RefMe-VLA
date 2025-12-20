@@ -1,0 +1,18 @@
+{
+  "task_id": "press_blue_button_1",
+  "task_text": "press the blue button one time",
+  "max_inter": 1,
+  "max_intra": 1,
+  "command_grid": [
+    ["press the blue button", "done"],
+    ["done"]
+  ],
+  "progress_grid": [
+    ["0/1 Pressed", "1/1 Pressed"],
+    ["None"]
+  ],
+  "world_state_grid": [
+    "None",
+    "total_count: 1"
+  ]
+}

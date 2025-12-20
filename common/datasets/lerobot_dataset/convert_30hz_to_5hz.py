@@ -85,17 +85,17 @@ def convert_30hz_to_5hz(source_base_path, dest_base_path, index, task_index):
 if __name__ == "__main__":
     # for i in tqdm(range(0,20)):
     #     convert_30hz_to_5hz("/data/ghkim/wipe_the_window/lerobot", "/data/ghkim/wipe_the_window/lerobot_5hz", i)
-    for i in tqdm(range(0, 20)):
+    for i in tqdm(range(0, 50)):
         convert_30hz_to_5hz("/data/ghkim/press the green button/lerobot",
                             "/data/ghkim/press the green button/lerobot_5hz",
                             i,1)
 
-    for i in tqdm(range(0, 20)):
+    for i in tqdm(range(0, 50)):
         convert_30hz_to_5hz("/data/ghkim/press the blue button/lerobot",
                             "/data/ghkim/press the blue button/lerobot_5hz",
                             i,2)
 
-    for i in tqdm(range(0, 20)):
+    for i in tqdm(range(0, 50)):
         convert_30hz_to_5hz("/data/ghkim/press the red button/lerobot",
                             "/data/ghkim/press the red button/lerobot_5hz",
                             i,0)

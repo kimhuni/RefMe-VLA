@@ -1,8 +1,8 @@
 import numpy as np
 import os
 
-from common.datasets.sample_dataset import sample_dataset
-from common.datasets.create_meta import create_meta
+from common.datasets.lerobot_dataset.sample_dataset import sample_dataset
+from common.datasets.lerobot_dataset.create_meta import create_meta
 
 def get_split_indices(dataset_size, test_size):
     step_size = int(1/test_size)
