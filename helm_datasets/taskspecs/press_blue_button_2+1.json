@@ -1,5 +1,9 @@
 {
   "task_id": "press_blue_button_2+1",
+
+  "max_inter": 1,
+  "max_intra": [2, 1],
+
   "task_text": [
     "press the blue button two times",
     "press the blue button three times in total"
@@ -8,8 +12,6 @@
     {"tasks": "press the blue button"},
     {"tasks": "press the blue button"}
   ],
-  "max_inter": 1,
-  "max_intra": [2, 1],
   "command_grid": [
     ["press_button", "press_button", "done"],
     ["press_button", "done"]

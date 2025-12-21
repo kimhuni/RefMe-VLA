@@ -1,16 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
-
-from helm_datasets.utils.io_utils import (
-    list_chunks_from_frames,
-    list_episodes_from_frames,
-    frames_dir,
-    episode_json_path,
-    read_json,
-)
+from typing import Dict, List, Optional, Any
 
 
 @dataclass(frozen=True)
@@ -19,80 +12,103 @@ class DataEpisode:
     chunk: str
     episode: str
 
-    episode_dir: Path
-    episode_json: Path
+    tasks: str
+    episode_index: int
 
     fps_frames: int
     n_frames: int
     event_frame_idx: int
 
-    table_dir: Path
-    wrist_dir: Path
+    frame_paths: Dict[str, List[Path]]  # {"table":[...], "wrist":[...]}
 
-    def default_image_path(self, use_event_frame: bool = False, camera: str = "table") -> Path:
-        """Return representative image path for this episode."""
-        cam_dir = self.table_dir if camera == "table" else self.wrist_dir
-        idx = self.event_frame_idx if use_event_frame else 0
-        return cam_dir / f"frame_{idx:06d}.jpg"
+    def get_frame_paths(self, cameras: List[str], t: int) -> Dict[str, str]:
+        return {cam: str(self.frame_paths[cam][t]) for cam in cameras}
 
 
-def scan_data_episodes(out_root: Path, require_event: bool = True) -> List[DataEpisode]:
-    """Scan frames_1hz/<chunk>/<episode>/<episode>.json and create DataEpisode list."""
+def _list_chunks(frames_root: Path) -> List[str]:
+    if not frames_root.exists():
+        return []
+    return sorted([p.name for p in frames_root.iterdir() if p.is_dir() and p.name.startswith("chunk-")])
+
+
+def _list_episodes(frames_root: Path, chunk: str) -> List[str]:
+    base = frames_root / chunk
+    if not base.exists():
+        return []
+    return sorted([p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("episode_")])
+
+
+def _episode_json_path(frames_root: Path, chunk: str, episode: str) -> Path:
+    return frames_root / chunk / episode / f"{episode}.json"
+
+
+def _camera_dir(frames_root: Path, chunk: str, episode: str, camera: str) -> Path:
+    return frames_root / chunk / episode / camera
+
+
+def _read_json(path: Path, default: Any = None) -> Any:
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def scan_data_episodes(
+    out_root: Path,
+    cameras: List[str],
+    require_event: bool = True,
+) -> List[DataEpisode]:
+    frames_root = out_root / "frames_1hz"
+    chunks = _list_chunks(frames_root)
     episodes: List[DataEpisode] = []
-    chunks = list_chunks_from_frames(out_root)
 
     for chunk in chunks:
-        eps = list_episodes_from_frames(out_root, chunk)
-        for ep in eps:
-            ep_dir = out_root / "frames_1hz" / chunk / ep
-            ep_json = episode_json_path(out_root, chunk, ep)
-            ev = read_json(ep_json, default=None)
+        for ep in _list_episodes(frames_root, chunk):
+            ep_json = _episode_json_path(frames_root, chunk, ep)
+            meta = _read_json(ep_json, default=None)
+            if meta is None:
+                if require_event:
+                    continue
+                meta = {}
 
+            tasks = str(meta.get("tasks", ""))
+            episode_index = int(meta.get("episode_index", -1))
+            fps_frames = int(meta.get("fps_frames", 1))
+
+            frame_paths: Dict[str, List[Path]] = {}
+            min_len: Optional[int] = None
+            for cam in cameras:
+                d = _camera_dir(frames_root, chunk, ep, cam)
+                imgs = sorted(d.glob("frame_*.jpg"))
+                frame_paths[cam] = imgs
+                min_len = len(imgs) if min_len is None else min(min_len, len(imgs))
+
+            if min_len is None or min_len == 0:
+                continue
+
+            n_frames = int(meta.get("n_frames", min_len))
+            n_frames = max(1, min(n_frames, min_len))
+
+            ev = meta.get("event_frame_idx", None)
             if ev is None:
                 if require_event:
                     continue
-                # fallback: no event file
-                fps_frames = 1
-                n_frames = _count_frames(frames_dir(out_root, chunk, ep, "table"))
                 event_frame_idx = 0
             else:
-                fps_frames = int(ev.get("fps_frames", 1))
-                n_frames = ev.get("n_frames", None)
-                if n_frames is None:
-                    n_frames = _count_frames(frames_dir(out_root, chunk, ep, "table"))
-                else:
-                    n_frames = int(n_frames)
-
-                event_frame_idx = ev.get("event_frame_idx", None)
-                if event_frame_idx is None:
-                    if require_event:
-                        continue
-                    event_frame_idx = 0
-                event_frame_idx = int(event_frame_idx)
-
-            table = frames_dir(out_root, chunk, ep, "table")
-            wrist = frames_dir(out_root, chunk, ep, "wrist")
+                event_frame_idx = int(ev)
+                event_frame_idx = max(0, min(event_frame_idx, n_frames - 1))
 
             episodes.append(
                 DataEpisode(
                     out_root=out_root,
                     chunk=chunk,
                     episode=ep,
-                    episode_dir=ep_dir,
-                    episode_json=ep_json,
+                    tasks=tasks,
+                    episode_index=episode_index,
                     fps_frames=fps_frames,
                     n_frames=n_frames,
                     event_frame_idx=event_frame_idx,
-                    table_dir=table,
-                    wrist_dir=wrist,
+                    frame_paths=frame_paths,
                 )
             )
 
     return episodes
-
-
-def _count_frames(cam_dir: Path) -> int:
-    if not cam_dir.exists():
-        return 0
-    # frame_000000.jpg 형태 가정
-    return len(list(cam_dir.glob("frame_*.jpg")))
