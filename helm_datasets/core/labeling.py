@@ -13,10 +13,11 @@ def intra_for_frame(t: int, event_frame_idx: int, base_intra: int, max_intra: in
 
 
 def merge_world_state_on_done(world_state: Optional[str], progress: str) -> Optional[str]:
-    suffix = f"final_progress = {progress}"
-    if world_state is None or str(world_state).strip().lower() == "none" or str(world_state).strip() == "":
-        return suffix
-    return f"{world_state}; {suffix}"
+    return world_state
+    #suffix = f"final_progress = {progress}"
+    #if world_state is None or str(world_state).strip().lower() == "none" or str(world_state).strip() == "":
+    #    return suffix
+    #return f"{world_state}; {suffix}"
 
 
 def make_previous_memory_text(progress: str, world_state: Optional[str]) -> str:
@@ -47,16 +48,28 @@ def make_rows_for_variant(
 
     rows: List[Dict[str, Any]] = []
     for t in range(ep.n_frames):
-        intra = intra_for_frame(t, ep.event_frame_idx, base_intra, max_intra)
+        # Output state for the current frame
+        out_intra = intra_for_frame(t, ep.event_frame_idx, base_intra, max_intra)
 
-        command = task.get_command(inter, intra)
-        progress = task.get_progress(inter, intra)
+        # Input state (Previous_Memory) is 1-step lagged.
+        # For the first frame, we set in_intra = out_intra (no prior frame exists).
+        if t == 0:
+            in_intra = out_intra
+        else:
+            in_intra = intra_for_frame(t - 1, ep.event_frame_idx, base_intra, max_intra)
+
+        # Previous memory comes from the *input* (lagged) state.
+        in_progress = task.get_progress(inter, in_intra)
+        in_world_state = ws  # keep raw ws for memory; do not apply done-merge here
+        previous_memory = make_previous_memory_text(progress=in_progress, world_state=in_world_state)
+
+        # Assistant output corresponds to the *current* state.
+        command = task.get_command(inter, out_intra)
+        progress = task.get_progress(inter, out_intra)
 
         world_state = ws
         if command == "done":
             world_state = merge_world_state_on_done(ws, progress)
-
-        previous_memory = make_previous_memory_text(progress=progress, world_state=world_state)
 
         images = ep.get_frame_paths(cameras=cameras, t=t)
         user_text = render_user_prompt(task_text=task_text, previous_memory=previous_memory, images=images, frame_idx=t)

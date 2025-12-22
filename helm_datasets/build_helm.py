@@ -12,21 +12,16 @@ from helm_datasets.core.registry import get_task_registry
 from helm_datasets.core.labeling import make_rows_for_variant
 
 """
-python -m helm_datasets.build_helm \
-  --out_root /data/ghkim/helm_data/press_the_blue_button_one_time_test_ep3 \
-  --require_event \
-  --camera table \
-  --use_event_frame \
-  --shard_by_state \
-  --tasks press_blue_button_3
 
+press N + m times: "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
+  
 ################################################################################
 
 export PYTHONPATH=$(pwd)
 
 python -m helm_datasets.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_blue_button_one_time_test_ep3" \
-  --tasks "press_blue_button_2+1" \
+  --out_root "/data/ghkim/helm_data/press_the_button_N_times_ep60" \
+  --tasks "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
   --val_ratio 0.1 \
   --shard_size 5000
 """

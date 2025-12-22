@@ -86,8 +86,8 @@ class TaskSpec:
 
     def get_world_state(self, inter: int) -> Optional[str]:
         ws = self.world_state_grid[inter]
-        if ws is None:
-            return None
-        if isinstance(ws, str) and ws.strip().lower() == "none":
-            return None
+        #if ws is None:
+        #    return None
+        #if isinstance(ws, str) and ws.strip().lower() == "none":
+        #    return None
         return str(ws)

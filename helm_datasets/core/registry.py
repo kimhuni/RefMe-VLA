@@ -28,12 +28,7 @@ def load_taskspec(path: Path) -> TaskSpec:
     if isinstance(ws_grid, list):
         norm_ws: List[Optional[str]] = []
         for v in ws_grid:
-            if v is None:
-                norm_ws.append(None)
-            elif isinstance(v, str) and v.strip().lower() == "none":
-                norm_ws.append(None)
-            else:
-                norm_ws.append(str(v))
+            norm_ws.append(str(v))
         raw["world_state_grid"] = norm_ws
 
     spec = TaskSpec(
