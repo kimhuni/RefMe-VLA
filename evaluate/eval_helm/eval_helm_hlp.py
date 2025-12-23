@@ -25,11 +25,11 @@ except Exception:
     yaml = None
 
 """
-CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_hlp.py \
+CUDA_VISIBLE_DEVICES=0 python evaluate/eval_helm_hlp.py \
   --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter_path /result/ghkim/HLP_HeLM_press_1_2_3/checkpoint-400 \
+  --adapter_path /result/ghkim/HLP_HeLM_press_1_2_3_1222/checkpoint-500 \
   --dataset_file /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1_2_3/all_val.jsonl \
-  --output_file /result/ghkim/HLP_HeLM_press_1_2_3/eval/all_val_pred_4k.jsonl \
+  --output_file /result/ghkim/HLP_HeLM_press_1_2_3/eval/all_val_pred_500.jsonl \
   --attn_impl sdpa \
   --max_new_tokens 128 \
   --log_every 20 \

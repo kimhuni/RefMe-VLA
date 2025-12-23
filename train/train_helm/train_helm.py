@@ -16,19 +16,19 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from helm_dataset import HelmJsonlDataset, HelmDataCollator
 
 """
-CUDA_VISIBLE_DEVICES=6 python train/train_helm/train_helm.py \
+CUDA_VISIBLE_DEVICES=7 python train/train_helm/train_helm.py \
   --model_name_or_path "/ckpt/Qwen2.5-VL-7B-Instruct" \
-  --train_jsonl "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1_2_3/all_train.jsonl" \
-  --val_jsonl   "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1_2_3/all_val.jsonl" \
-  --output_dir "/result/ghkim/HLP_HeLM_press_1_2_3_1222" \
+  --train_jsonl "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3/all_train.jsonl" \
+  --val_jsonl   "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3/all_val.jsonl" \
+  --output_dir "/result/ghkim/HLP_HeLM_press_1+2+3_1223" \
   --wandb_project "RefMe" \
-  --wandb_run_name "HLP_HeLM_press_1_2_3_1222" \
+  --wandb_run_name "HLP_HeLM_press_1+2+3_1223" \
   --use_qlora 1 \
   --per_device_train_batch_size 4 \
   --per_device_eval_batch_size 4 \
   --eval_steps 50 \
-  --save_steps 500 \
-  --max_steps 3000
+  --save_steps 300 \
+  --max_steps 1500
 """
 
 def count_parameters(model) -> tuple[int, int, float]:
