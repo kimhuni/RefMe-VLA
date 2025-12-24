@@ -27,8 +27,8 @@ CUDA_VISIBLE_DEVICES=7 python train/train_helm/train_helm.py \
   --per_device_train_batch_size 4 \
   --per_device_eval_batch_size 4 \
   --eval_steps 50 \
-  --save_steps 300 \
-  --max_steps 1500
+  --save_steps 200 \
+  --max_steps 1000
 """
 
 def count_parameters(model) -> tuple[int, int, float]:
@@ -112,10 +112,10 @@ def main():
     ap.add_argument("--gradient_accumulation_steps", type=int, default=8)
     ap.add_argument("--max_steps", type=int, default=2000)
     ap.add_argument("--learning_rate", type=float, default=2e-5)
-    ap.add_argument("--warmup_steps", type=int, default=10)
+    ap.add_argument("--warmup_steps", type=int, default=50)
 
-    ap.add_argument("--logging_steps", type=int, default=10)
-    ap.add_argument("--eval_steps", type=int, default=200)
+    ap.add_argument("--logging_steps", type=int, default=5)
+    ap.add_argument("--eval_steps", type=int, default=100)
     ap.add_argument("--save_steps", type=int, default=200)
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--num_workers", type=int, default=4)

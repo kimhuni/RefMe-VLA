@@ -1,0 +1,20 @@
+{
+  "task_id": "wipe_the_middle_window",
+  "task_text": [
+    "wipe the window"
+  ],
+  "episode_filters" : [
+    {"tasks": "wipe the middle side of the window"}
+  ],
+  "max_inter": 0,
+  "max_intra": [1],
+  "command_grid": [
+    ["wipe the middle side of the window", "done"]
+  ],
+  "progress_grid": [
+    ["bottom wiped", "bottom, middle wiped"]
+  ],
+  "world_state_grid": [
+    "None"
+  ]
+}
