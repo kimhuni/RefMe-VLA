@@ -48,6 +48,12 @@ TASK_GROUPS = {
             "3": "press the blue button three times",
             "4": "press the blue button four times",
         },
+        "prev_history": {
+            "1": "Progress: 0/1 Pressed | World_State: None",
+            "2": "Progress: 0/2 Pressed | World_State: None",
+            "3": "Progress: 0/3 Pressed | World_State: None",
+            "4": "Progress: 0/4 Pressed | World_State: None",
+        },
         "default_key": "1",
     },
     "press_in_order": {
@@ -75,11 +81,13 @@ class KeyState:
     set_zero: bool = False
     reset_all: bool = False
     selected_task: Optional[str] = None
+    prev_history: Optional[str] = None
 
 
 def init_keyboard_listener(task_group_cfg: Dict[str, Any]) -> KeyState:
     st = KeyState()
     keymap = task_group_cfg["keymap"]
+    prev_history = task_group_cfg["prev_history"]
 
     def on_press(key):
         try:
@@ -98,7 +106,8 @@ def init_keyboard_listener(task_group_cfg: Dict[str, Any]) -> KeyState:
 
             if hasattr(key, "char") and key.char in keymap:
                 st.selected_task = keymap[key.char]
-                print(f"[key] {key.char} -> task = {st.selected_task}")
+                st.prev_history = prev_history[key.char]
+                print(f"[key] {key.char} -> task = {st.selected_task} | prev_history = {st.prev_history}")
 
         except Exception as e:
             print("[key] error:", e)
@@ -120,7 +129,7 @@ def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Opti
     - 이미지 placeholder 2개 + 텍스트 프롬프트
     - Frame/Images 라인 없이 깔끔한 정책 프롬프트
     """
-    prev_memory_str = prev_memory if prev_memory is not None else "Progress: 0/1 Pressed | World_State: None"
+    prev_memory_str = prev_memory
 
     logging.info(prev_memory_str)
 
@@ -164,7 +173,8 @@ def main(
 
     tg = TASK_GROUPS[task_group_name]
     current_task = tg["keymap"][tg["default_key"]]
-    logging.info(f"[INIT] task_group={tg['name']} default_task='{current_task}'")
+    current_history = tg["prev_history"][tg["default_key"]]
+    logging.info(f"[INIT] task_group={tg['name']} default_task='{current_task}' default_history='{current_history}'")
 
     # --- init runtimes ---
     hlp = HLPPolicy(
@@ -204,16 +214,17 @@ def main(
                 prev_memory = None
                 hlp.reset()
                 # policy reset은 기존 로직을 존중 (필요하면 아래 한 줄 추가 가능)
-                # llp_ctx.policy.reset()
+                llp_ctx.policy.reset()
                 logging.info("[MAIN] reset HLP/LLP (memory cleared)")
                 ks.reset_all = False
 
             if ks.selected_task is not None:
                 current_task = ks.selected_task
-                prev_memory = None
+                prev_memory = ks.prev_history
                 hlp.reset()
                 logging.info(f"[MAIN] task changed -> '{current_task}' (memory cleared)")
                 ks.selected_task = None
+                ks.prev_history = None
 
             # -------- capture shared observation ONCE --------
             state, table_img, wrist_img = capture_shared_observation(

@@ -111,8 +111,8 @@ def main():
     ap.add_argument("--per_device_eval_batch_size", type=int, default=1)
     ap.add_argument("--gradient_accumulation_steps", type=int, default=8)
     ap.add_argument("--max_steps", type=int, default=2000)
-    ap.add_argument("--learning_rate", type=float, default=2e-4)
-    ap.add_argument("--warmup_steps", type=int, default=100)
+    ap.add_argument("--learning_rate", type=float, default=2e-5)
+    ap.add_argument("--warmup_steps", type=int, default=10)
 
     ap.add_argument("--logging_steps", type=int, default=10)
     ap.add_argument("--eval_steps", type=int, default=200)

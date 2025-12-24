@@ -231,17 +231,33 @@ def llp_step(
     t_pred_start = time.time()
     with torch.no_grad():
         action_pred = ctx.policy.select_action(batch).squeeze()
+    # t_pred_end = time.time()
+
+    # # ✅ infer_chunk reset 로직은 절대 건드리지 않음 (요청사항)
+    # if len(ctx.policy._action_queue) < ctx.cfg.infer_chunk:
+    #     ctx.policy.reset()
+    #
+    # end_pose_data = action_pred[:6].cpu().to(dtype=int).tolist()
+    # gripper_data = [action_pred[6].cpu().to(dtype=int), GRIPPER_EFFORT]
+    #
+    # if ctx.piper is not None:
+    #     ctrl_end_pose(ctx.piper, end_pose_data, gripper_data)
+
+    # [modified] send action data until it reaches chunk_size
+    while not (len(ctx.policy._action_queue) < ctx.cfg.infer_chunk):
+        end_pose_data = action_pred[:6].cpu().to(dtype=int).tolist()
+        gripper_data = [action_pred[6].cpu().to(dtype=int), GRIPPER_EFFORT]
+
+        if ctx.piper is not None:
+            ctrl_end_pose(ctx.piper, end_pose_data, gripper_data)
+
+        with torch.no_grad():
+            action_pred = ctx.policy.select_action(batch).squeeze()
+
+    ctx.policy.reset()
+
     t_pred_end = time.time()
 
-    # ✅ infer_chunk reset 로직은 절대 건드리지 않음 (요청사항)
-    if len(ctx.policy._action_queue) < ctx.cfg.infer_chunk:
-        ctx.policy.reset()
-
-    end_pose_data = action_pred[:6].cpu().to(dtype=int).tolist()
-    gripper_data = [action_pred[6].cpu().to(dtype=int), GRIPPER_EFFORT]
-
-    if ctx.piper is not None:
-        ctrl_end_pose(ctx.piper, end_pose_data, gripper_data)
 
     t_total = time.time() - t_start
     t_action_pred = t_pred_end - t_pred_start
