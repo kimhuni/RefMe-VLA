@@ -40,7 +40,7 @@ class LLPConfig:
     fps: int = 5
     cam_list: list[str] = field(default_factory=lambda: ['wrist', 'exo', 'table'])
     device: str = "cuda:0"
-    infer_chunk: int = 45
+    infer_chunk: int = 40
 
     def __post_init__(self):
         if self.policy is not None:

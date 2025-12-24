@@ -120,7 +120,10 @@ def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Opti
     - 이미지 placeholder 2개 + 텍스트 프롬프트
     - Frame/Images 라인 없이 깔끔한 정책 프롬프트
     """
-    prev_memory_str = prev_memory if prev_memory is not None else "Progress: 0/0\nWorld_State: None"
+    prev_memory_str = prev_memory if prev_memory is not None else "Progress: 0/1 Pressed | World_State: None"
+
+    logging.info(prev_memory_str)
+
     user_text = (
         HLP_HEADER + "\n\n"
         f"Task: {task}\n"
@@ -145,6 +148,7 @@ def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Opti
         images=[table_img, wrist_img],
         padding=True,
         return_tensors="pt",
+        do_rescale=False,
     )
     return batch
 
@@ -223,6 +227,8 @@ def main(
                 logging.warning("[MAIN] use_devices=False not supported in this realtime loop yet")
                 continue
 
+
+
             # -------- HLP --------
             hlp_batch = make_hlp_batch(
                 processor=hlp.processor,
@@ -232,6 +238,7 @@ def main(
                 prev_memory=prev_memory,
             )
 
+            # HLP 1 step
             t_hlp0 = time.time()
             hlp_out = hlp.forward(hlp_batch)
             hlp_t = time.time() - t_hlp0
@@ -239,6 +246,7 @@ def main(
             progress = hlp_out.get("Progress", "")
             world_state = hlp_out.get("World_State", "None")
             command = hlp_out.get("Command", "").strip()
+            # command = hlp_out.get("Command", "")
 
             # main이 prev_memory를 관리 (overwrite)
             prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
@@ -247,13 +255,13 @@ def main(
             if command == "done":
                 loop_t = time.time() - loop_t0
                 fps = 1.0 / max(loop_t, 1e-6)
-                logging.info(
-                    f"[MAIN] step={step_i} fps={fps:.2f} "
-                    f"task='{current_task}' cmd='done' progress='{progress}' "
-                    f"hlp_t={hlp_t:.3f}s"
-                )
+                # logging.info(
+                #     f"[MAIN] step={step_i} fps={fps:.2f} "
+                #     f"task='{current_task}' cmd='done' progress='{progress}' "
+                #     f"hlp_t={hlp_t:.3f}s"
+                # )
                 logging.info("[MAIN] HLP returned done -> stop")
-                break
+                # break
 
             # -------- LLP (batch is created in main, uses same observation) --------
             llp_batch = create_llp_batch_from_obs(
@@ -264,6 +272,7 @@ def main(
             )
 
             t_llp0 = time.time()
+            # LLP 1 step
             t_pred, t_total = llp_step(llp_ctx, task_text=command, batch=llp_batch)
             llp_t = time.time() - t_llp0
 
@@ -272,8 +281,8 @@ def main(
             fps = 1.0 / max(loop_t, 1e-6)
             logging.info(
                 f"[MAIN] step={step_i} fps={fps:.2f} "
-                f"task='{current_task}' cmd='{command}' "
-                f"progress='{progress}' world='{world_state}' "
+                f"task='{current_task}' cmd='{command}' \n"
+                f"progress='{progress}' world_state='{world_state}' "
                 f"hlp_t={hlp_t:.3f}s llp_t={llp_t:.3f}s "
                 f"(llp_pred={t_pred:.3f}s llp_total={t_total:.3f}s)"
             )

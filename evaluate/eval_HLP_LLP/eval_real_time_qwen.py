@@ -99,9 +99,12 @@ class HLPQwen:
             attn_implementation=attn_impl,
             trust_remote_code=True,
         )
+        print("[HLP] loaded Qwen 2.5 VL")
         model = PeftModel.from_pretrained(base, adapter_path)
         # inference에서는 merge 권장(속도/단순)
         self.model = model.merge_and_unload().eval()
+        print("[HLP] QLoRA merged")
+
         print(f"[HLP] load done: {time.time()-t0:.2f}s")
 
     def reset(self):
@@ -126,5 +129,7 @@ class HLPQwen:
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,
         )[0].strip()
+
+        print("raw_text: ", out_text)
 
         return parse_hlp_yaml(out_text)
