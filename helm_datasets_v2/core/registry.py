@@ -35,7 +35,6 @@ def load_taskspec(path: Path) -> TaskSpec:
         task_id=str(raw["task_id"]),
         task_text=list(raw["task_text"]),
         episode_filters=list(raw.get("episode_filters", [{} for _ in range(int(raw["max_inter"]) + 1)])),
-        llp_commands=str(raw["llp_commands"]),
         max_inter=int(raw["max_inter"]),
         max_intra=[int(x) for x in list(raw["max_intra"])],
         command_grid=[list(r) for r in list(raw["command_grid"])],

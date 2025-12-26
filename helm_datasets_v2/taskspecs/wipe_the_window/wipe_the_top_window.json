@@ -1,12 +1,12 @@
 {
   "task_id": "wipe_the_top_window",
   "task_text": [
-    "wipe the bottom, middle, top part of the window in order"
+    "wipe the window"
   ],
   "episode_filters" : [
     {"tasks": "wipe the top side of the window"}
   ],
-  "llp_commands": "- wipe the bottom side of the window\n- wipe the middle side of the window\n- wipe the top side of the window\n- done",
+  "llp_commands": "- wipe the bottom side of the window\n- wipe the middle side of the window\n- wipe the top side of the window",
   "max_inter": 0,
   "max_intra": [1],
   "command_grid": [

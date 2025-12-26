@@ -15,8 +15,6 @@ HLP_HEADER = (
     "- Only advance Progress when the event has occurred in the current frame.\n"
     "- World_State should be concise and persistent (use None if no state).\n"
     "- Command should be either the task command or \"done\" if finished.\n"
-    # "- Command should be either the \"press the blue button\" or \"done\" if finished.\n"
-    "Return YAML with keys Progress, World_State, Command.\n"
 )
 
 _YAML_KEYS = ("Progress", "World_State", "Command")
@@ -119,9 +117,6 @@ class HLPQwen:
             **inputs,
             max_new_tokens=self.max_new_tokens,
             do_sample=False,
-            # do_sample=True,
-            # temperature=1e-6,  # 🔥 여기
-            # top_p=0.9,
         )
 
         # prompt 잘라내기
@@ -134,6 +129,6 @@ class HLPQwen:
             clean_up_tokenization_spaces=False,
         )[0].strip()
 
-        print("------------ [HLP] raw_text -----------\n", out_text, "-------------------------------")
+        print("raw_text: ", out_text)
 
         return parse_hlp_yaml(out_text)

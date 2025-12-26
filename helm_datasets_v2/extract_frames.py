@@ -7,8 +7,8 @@ from typing import Any, Dict, Optional
 from helm_datasets.utils.io_utils import ensure_dir, frames_dir, list_chunks_from_videos, episode_json_path, read_json
 """
 python -m helm_datasets.extract_frames \
-  --lerobot_root "/data/ghkim/wipe_the_window" \
-  --out_root     "/data/ghkim/helm_data/wipe_the_window"
+  --lerobot_root "/data/ghkim/press_the_RGB_button_ep60" \
+  --out_root     "/data/ghkim/helm_data/press_the_button_N_times_ep60"
 """
 
 def load_lerobot_episodes_meta(lerobot_root: Path) -> Dict[int, Dict[str, Any]]:

@@ -12,9 +12,16 @@ from torch.nn.utils.rnn import pad_sequence
 from PIL import Image
 from transformers import AutoProcessor
 
+HLP_HEADER_1 = (
+    "Role: High-Level Robot Policy.\n"
+    "Given the table view image and Previous_Memory, update the memory and choose the next atomic command.\n"
+    "- Only advance Progress when the event has occurred in the current frame.\n"
+    "- World_State should be concise and persistent (use None if no state).\n"
+    "- Command should be either the task command or \"done\" if finished.\n"
+)
 
-HLP_HEADER = (
-    "Role: High-Level Planner (HLP).\n"
+HLP_HEADER_2 = (
+    "Role: High-Level Robot Policy.\n"
     "Given the two images and Previous_Memory, update the memory and choose the next atomic command.\n"
     "- Only advance Progress when the event has occurred in the current frame.\n"
     "- World_State should be concise and persistent (use None if no state).\n"
@@ -64,18 +71,33 @@ def _get_user_assistant(row: Dict[str, Any]) -> Tuple[str, str]:
     return user_text, asst_text
 
 
-def _load_two_images(row: Dict[str, Any]) -> List[Image.Image]:
+def _load_images(row: Dict[str, Any], num_image: int) -> List[Image.Image]:
+    """
+    Load 1 or 2 images from the row.
+
+    - num_image == 1: requires 'table'
+    - num_image == 2: requires 'table' and 'wrist'
+
+    Returns a list of PIL Images whose length equals num_image.
+    """
     images = row.get("images", {})
     if not isinstance(images, dict):
         raise ValueError("row['images'] must be a dict")
 
-    # your current schema uses table/wrist
     p_table = images.get("table", None)
     p_wrist = images.get("wrist", None)
-    if not p_table or not p_wrist:
-        raise ValueError(f"images must include 'table' and 'wrist'. got keys={list(images.keys())}")
+
+    if not p_table:
+        raise ValueError(f"images must include 'table'. got keys={list(images.keys())}")
 
     img0 = Image.open(p_table).convert("RGB")
+
+    if int(num_image) == 1:
+        return [img0]
+
+    if not p_wrist:
+        raise ValueError(f"num_image=2 requires 'wrist'. got keys={list(images.keys())}")
+
     img1 = Image.open(p_wrist).convert("RGB")
     return [img0, img1]
 
@@ -102,9 +124,11 @@ class HelmJsonlDataset(Dataset):
       - labels are masked to compute loss only on assistant content
     """
 
-    def __init__(self, jsonl_path: str, model_name_or_path: str, add_hlp_header: bool = True, drop_frame_line: bool = True, drop_images_line: bool = True, drop_return_yaml_line: bool = True):
+    def __init__(self, jsonl_path: str, num_image: int, model_name_or_path: str, add_hlp_header: bool = True, drop_frame_line: bool = True, drop_images_line: bool = True, drop_return_yaml_line: bool = True):
         self.jsonl_path = Path(jsonl_path)
         self.rows = _read_jsonl(self.jsonl_path)
+
+        self.num_image = num_image
 
         self.add_hlp_header = add_hlp_header
         self.drop_frame_line = drop_frame_line
@@ -140,25 +164,38 @@ class HelmJsonlDataset(Dataset):
         if prefixes:
             user_text = _drop_lines_with_prefix(user_text, tuple(prefixes))
 
-        # If the JSONL already includes an instruction like "Return YAML...", we dropped it above.
-        # We always keep a single canonical instruction in the header (when enabled).
+        # Add canonical header BEFORE building messages so it is actually included in the chat template.
         if self.add_hlp_header:
+            HLP_HEADER = HLP_HEADER_1 if int(self.num_image) == 1 else HLP_HEADER_2
             user_text = HLP_HEADER + "\n\n" + user_text.strip()
 
-        images = _load_two_images(row)
+        images = _load_images(row, int(self.num_image))
 
-        # Qwen2.5-VL style messages: 2 images + text
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "image"},
-                    {"type": "text", "text": user_text},
-                ],
-            },
-            {"role": "assistant", "content": target_text},
-        ]
+        if int(self.num_image) == 1:
+            # Qwen2.5-VL style messages: 1 image + text
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": user_text},
+                    ],
+                },
+                {"role": "assistant", "content": target_text},
+            ]
+        else:
+            # Qwen2.5-VL style messages: 2 images + text
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "image"},
+                        {"type": "text", "text": user_text},
+                    ],
+                },
+                {"role": "assistant", "content": target_text},
+            ]
 
         prompt = self.processor.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=False
@@ -201,8 +238,12 @@ class HelmJsonlDataset(Dataset):
             "pixel_values": pixel_values,
         }
 
-        if "image_grid_thw" in model_inputs:
-            out["image_grid_thw"] = model_inputs["image_grid_thw"].squeeze(0)
+        grid = model_inputs.get("image_grid_thw", None)
+        if grid is not None:
+            grid = grid.squeeze(0)
+            if grid.ndim == 1:
+                grid = grid.unsqueeze(0)  # (3,) -> (1,3)
+            out["image_grid_thw"] = grid
 
 
         return out

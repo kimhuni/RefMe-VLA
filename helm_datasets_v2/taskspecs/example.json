@@ -1,0 +1,25 @@
+{
+  "task_id": "[inter] task A -> task B",
+  "task_text": [
+    "task A",
+    "task B"
+  ],
+  "episode_filters" : [
+    {"tasks": "task A"},
+    {"tasks": "task B"}
+  ],
+  "max_inter": 1,
+  "max_intra": [2, 1],
+  "command_grid": [
+    ["subtask a_0", "subtask a_1", "done"],
+    ["subtask b_0", "done"]
+  ],
+  "progress_grid": [
+    ["progress a_0", "progress a_1", "done"],
+    ["progress b_0", "done"]
+  ],
+  "world_state_grid": [
+    "None",
+    "world state of task A"
+  ]
+}

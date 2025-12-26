@@ -1,0 +1,15 @@
+<out_root>/
+  meta.json
+  index.json
+  scenarios.json
+  frames_1hz/
+    chunk-000/episode_000000/table/frame_000000.jpg
+    chunk-000/episode_000000/wrist/frame_000000.jpg
+    ...
+  annotations/
+    events/
+      chunk-000/episode_000000.json
+      ...
+  jsonl/
+    train-00000.jsonl
+    val-00000.jsonl

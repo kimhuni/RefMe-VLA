@@ -45,7 +45,6 @@ def make_rows_for_variant(
 
     task_text = task.get_task_text(inter)
     ws = task.get_world_state(inter)
-    llp_commands = task.llp_commands
 
     rows: List[Dict[str, Any]] = []
     for t in range(ep.n_frames):
@@ -73,7 +72,7 @@ def make_rows_for_variant(
             world_state = merge_world_state_on_done(ws, progress)
 
         images = ep.get_frame_paths(cameras=cameras, t=t)
-        user_text = render_user_prompt(task_text=task_text, previous_memory=previous_memory, avail_cmd_block=llp_commands)
+        user_text = render_user_prompt(task_text=task_text, previous_memory=previous_memory, images=images, frame_idx=t)
         assistant_text = render_assistant_yaml(progress=progress, world_state=world_state, command=command)
 
         rows.append(

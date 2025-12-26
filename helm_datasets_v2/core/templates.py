@@ -13,13 +13,15 @@ except Exception:
 def render_user_prompt(
     task_text: str,
     previous_memory: str,
-    avail_cmd_block: str
+    images: Dict[str, str],
+    frame_idx: int,
 ) -> str:
+    img_tokens = " ".join([f"<image_{k}>" for k in images.keys()])
     return (
         f"Task: {task_text}\n"
         f"Previous_Memory: {previous_memory}\n"
-        f"Available_LLP_Commands:\n{avail_cmd_block}\n"
-        f"Choose ONE command exactly as written above.\n"
+        f"Frame: {frame_idx}\n"
+        f"Images: {img_tokens}\n"
         f"Return YAML with keys Progress, World_State, Command."
     )
 

@@ -11,9 +11,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 """
 # 전부 병합
 python helm_datasets/merge_helm_data.py \
-  --jsonl_root /data/ghkim/helm_data/wipe_the_window/jsonl \
-  --out_dir   /data/ghkim/helm_data/wipe_the_window/jsonl/merged/wipe_only_tableview \
-  --tasks "wipe_the_bottom_window","wipe_the_middle_window","wipe_the_top_window" \
+  --jsonl_root /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl \
+  --out_dir   /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3 \
+  --tasks "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
   --split_mode keep \
   --shard_size 0
   

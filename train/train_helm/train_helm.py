@@ -18,11 +18,12 @@ from helm_dataset import HelmJsonlDataset, HelmDataCollator
 """
 CUDA_VISIBLE_DEVICES=7 python train/train_helm/train_helm.py \
   --model_name_or_path "/ckpt/Qwen2.5-VL-7B-Instruct" \
-  --train_jsonl "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3/all_train.jsonl" \
-  --val_jsonl   "/data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3/all_val.jsonl" \
-  --output_dir "/result/ghkim/HLP_HeLM_press_1+2+3_1223" \
+  --train_jsonl "/data/ghkim/helm_data/wipe_the_window/jsonl/merged/wipe_only_tableview/all_train.jsonl" \
+  --val_jsonl   "/data/ghkim/helm_data/wipe_the_window/jsonl/merged/wipe_only_tableview/all_val.jsonl" \
+  --num_images 1 \
+  --output_dir "/result/ghkim/HLP_HeLM_wipe_only_tableview_1226" \
   --wandb_project "RefMe" \
-  --wandb_run_name "HLP_HeLM_press_1+2+3_1223" \
+  --wandb_run_name "/HLP_HeLM_wipe_only_tableview_1226" \
   --use_qlora 1 \
   --per_device_train_batch_size 4 \
   --per_device_eval_batch_size 4 \
@@ -104,6 +105,8 @@ def main():
     ap.add_argument("--model_name_or_path", type=str, required=True)
     ap.add_argument("--train_jsonl", type=str, required=True)
     ap.add_argument("--val_jsonl", type=str, required=True)
+    ap.add_argument("--num_images", type=int, default=2)
+
     ap.add_argument("--output_dir", type=str, required=True)
 
     ap.add_argument("--use_qlora", type=int, default=1)
@@ -139,8 +142,16 @@ def main():
     except Exception as e:
         print(f"[WARN] wandb.init failed or wandb not installed: {e}")
 
-    train_ds = HelmJsonlDataset(args.train_jsonl, args.model_name_or_path)
-    val_ds = HelmJsonlDataset(args.val_jsonl, args.model_name_or_path)
+    train_ds = HelmJsonlDataset(
+        jsonl_path=args.train_jsonl,
+        model_name_or_path=args.model_name_or_path,
+        num_image=args.num_images
+    )
+    val_ds = HelmJsonlDataset(
+        jsonl_path=args.val_jsonl,
+        model_name_or_path=args.model_name_or_path,
+        num_image=args.num_images
+    )
     collator = HelmDataCollator(pad_id=train_ds.processor.tokenizer.pad_token_id)
 
     model = build_model(args.model_name_or_path, use_qlora=bool(args.use_qlora))
@@ -189,6 +200,7 @@ def main():
         eval_dataset=val_ds,   # ✅ val loss 계산
         data_collator=collator,
         callbacks=[WandbStaticStatsCallback()],  # ✅ trainable/all params 로깅
+        label_names=["labels"],
     )
 
     trainer.train()

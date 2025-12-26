@@ -10,9 +10,6 @@ from pynput import keyboard
 import torch
 from PIL import Image
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 from configs.default import DatasetConfig
 
 from evaluate.eval_HLP_LLP.eval_real_time_qwen import HLPQwen as HLPPolicy, HLP_HEADER
@@ -77,54 +74,6 @@ TASK_GROUPS = {
     },
 }
 
-def debug_plot_image(img, title="image", index: int = 0):
-    """
-    Supports:
-      - torch.Tensor: (H,W), (C,H,W), (B,C,H,W), (B,H,W,C)
-      - np.ndarray:   same variants
-      - PIL.Image
-    """
-    # --- to numpy ---
-    if isinstance(img, torch.Tensor):
-        img = img.detach().cpu()
-
-        # handle batch: (B,C,H,W) or (B,H,W,C)
-        if img.ndim == 4:
-            img = img[index]  # -> (C,H,W) or (H,W,C)
-
-        # (C,H,W) -> (H,W,C)
-        if img.ndim == 3 and img.shape[0] in (1, 3):
-            img = img.permute(1, 2, 0)
-
-        img = img.numpy()
-
-    elif hasattr(img, "save"):  # PIL.Image-like
-        img = np.array(img)
-
-    # --- stats ---
-    if isinstance(img, np.ndarray):
-        # print(f"[DEBUG] {title} shape={img.shape} dtype={img.dtype} "
-        #       f"min={img.min():.4f} max={img.max():.4f} mean={img.mean():.4f}")
-
-        # squeeze grayscale channel if (H,W,1)
-        if img.ndim == 3 and img.shape[2] == 1:
-            img = img[:, :, 0]
-
-        # convert to uint8 for display if float
-        if img.dtype != np.uint8:
-            if img.max() <= 1.0:
-                img = (img * 255.0).clip(0, 255).astype(np.uint8)
-            else:
-                img = img.clip(0, 255).astype(np.uint8)
-
-    # --- plot ---
-    plt.figure(figsize=(6, 4))
-    plt.imshow(img)
-    plt.title(title)
-    plt.axis("off")
-    plt.tight_layout()
-    plt.show()
-
 
 @dataclass
 class KeyState:
@@ -182,7 +131,7 @@ def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Opti
     """
     prev_memory_str = prev_memory
 
-    print("previous memory sent: ", prev_memory_str)
+    logging.info(prev_memory_str)
 
     user_text = (
         HLP_HEADER + "\n\n"
@@ -262,7 +211,7 @@ def main(
 
             if ks.reset_all:
                 # HLP/LLP reset: memory reset + (필요하면 policy reset)
-                prev_memory = ks.prev_history
+                prev_memory = None
                 hlp.reset()
                 # policy reset은 기존 로직을 존중 (필요하면 아래 한 줄 추가 가능)
                 llp_ctx.policy.reset()
@@ -289,7 +238,7 @@ def main(
                 logging.warning("[MAIN] use_devices=False not supported in this realtime loop yet")
                 continue
 
-            debug_plot_image(table_img, title="TABLE IMAGE")
+
 
             # -------- HLP --------
             hlp_batch = make_hlp_batch(
@@ -308,24 +257,24 @@ def main(
             progress = hlp_out.get("Progress", "")
             world_state = hlp_out.get("World_State", "None")
             command = hlp_out.get("Command", "").strip()
+            # command = hlp_out.get("Command", "")
 
-            # if subtask done (memory changed) -> return to zero
-            if prev_memory != f"Progress: {progress} | World_State: {world_state}":
-                llp_send_zero(llp_ctx)
+            # main이 prev_memory를 관리 (overwrite)
+            prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
 
-            # [UPDATE] prev memory : main이 prev_memory를 관리
-            prev_memory = f"Progress: {progress} | World_State: {world_state}"
-
-            # if DONE
+            # -------- termination --------
             if command == "done":
                 loop_t = time.time() - loop_t0
-                # reset LLP and arm
-                llp_send_zero(llp_ctx)
-                llp_ctx.policy.reset()
-                logging.info("[MAIN] HLP returned done -> pose reset")
+                fps = 1.0 / max(loop_t, 1e-6)
+                # logging.info(
+                #     f"[MAIN] step={step_i} fps={fps:.2f} "
+                #     f"task='{current_task}' cmd='done' progress='{progress}' "
+                #     f"hlp_t={hlp_t:.3f}s"
+                # )
+                logging.info("[MAIN] HLP returned done -> stop")
                 # break
 
-            # -------- LLP Batch --------
+            # -------- LLP (batch is created in main, uses same observation) --------
             llp_batch = create_llp_batch_from_obs(
                 state=state,
                 table_img=table_img,
@@ -341,14 +290,13 @@ def main(
             # -------- logging --------
             loop_t = time.time() - loop_t0
             fps = 1.0 / max(loop_t, 1e-6)
-            print(
+            logging.info(
                 f"[MAIN] step={step_i} fps={fps:.2f} "
                 f"task='{current_task}' cmd='{command}' \n"
                 f"progress='{progress}' world_state='{world_state}' "
                 f"hlp_t={hlp_t:.3f}s llp_t={llp_t:.3f}s "
                 f"(llp_pred={t_pred:.3f}s llp_total={t_total:.3f}s)"
             )
-            print("=========================================================================================================")
 
     finally:
         stop_keyboard_listener(ks)

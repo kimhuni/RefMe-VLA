@@ -16,7 +16,7 @@ from helm_datasets.utils.io_utils import (
 """
 export PYTHONPATH=$(pwd)
 streamlit run helm_datasets/annotate_app.py --\
-    --out_root "/data/ghkim/helm_data/wipe_the_window"
+    --out_root "/data/ghkim/helm_data/press_the_button_N_times_ep60"
 """
 
 st.set_page_config(layout="wide", page_title="HeLM Event Annotator")

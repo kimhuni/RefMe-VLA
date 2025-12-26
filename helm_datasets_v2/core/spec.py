@@ -24,8 +24,6 @@ class TaskSpec:
     task_text: List[str]                 # len = max_inter + 1
     episode_filters: List[Filter]        # len = max_inter + 1
 
-    llp_commands: str
-
     max_inter: int                       # inter: 0..max_inter
     max_intra: List[int]                 # len = max_inter + 1; each is max index
 
@@ -79,9 +77,6 @@ class TaskSpec:
 
     def get_task_text(self, inter: int) -> str:
         return self.task_text[inter]
-
-    def get_available_llp_commands(self) -> str:
-        return self.llp_commands
 
     def get_command(self, inter: int, intra: int) -> str:
         return self.command_grid[inter][intra]

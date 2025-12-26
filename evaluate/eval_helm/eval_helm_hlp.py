@@ -25,11 +25,11 @@ except Exception:
     yaml = None
 
 """
-CUDA_VISIBLE_DEVICES=0 python evaluate/eval_helm_hlp.py \
+CUDA_VISIBLE_DEVICES=7 python evaluate/eval_helm/eval_helm_hlp.py \
   --base_model_path /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter_path /result/ghkim/HLP_HeLM_press_1_2_3_1222/checkpoint-500 \
   --dataset_file /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1_2_3/all_val.jsonl \
-  --output_file /result/ghkim/HLP_HeLM_press_1_2_3/eval/all_val_pred_500.jsonl \
+  --output_file /result/ghkim/HLP_HeLM_press_1_2_3/eval/all_val_pred_500_base.jsonl \
   --attn_impl sdpa \
   --max_new_tokens 128 \
   --log_every 20 \
@@ -45,6 +45,8 @@ HLP_HEADER = (
     "- Command should be either the task command or \"done\" if finished.\n"
     "Return YAML with keys Progress, World_State, Command.\n"
 )
+
+# HLP_HEADER = ("describe the image")
 
 
 def _drop_lines_with_prefix(text: str, prefixes: Tuple[str, ...]) -> str:
@@ -181,6 +183,7 @@ def generate_yaml(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base_model_path", type=str, required=True)
+    ap.add_argument("--use_base", type=bool, default=False)
     ap.add_argument("--adapter_path", type=str, required=True)
     ap.add_argument("--dataset_file", type=str, required=True)   # all_val.jsonl 같은 파일
     ap.add_argument("--output_file", type=str, required=True)
@@ -230,7 +233,11 @@ def main():
     )
 
     # adapter 로드
-    model = PeftModel.from_pretrained(base, args.adapter_path)
+    if (args.use_base):
+        model = base
+    else:
+        model = PeftModel.from_pretrained(base, args.adapter_path)
+
     model.eval()
 
     n = 0
@@ -269,6 +276,8 @@ def main():
                 images=images,
                 max_new_tokens=args.max_new_tokens,
             )
+
+            # print("pred:", pred)
 
             gt_obj = parse_yaml_maybe(gt)
             pred_obj = parse_yaml_maybe(pred)
