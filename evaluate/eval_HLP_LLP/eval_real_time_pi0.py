@@ -244,7 +244,10 @@ def llp_step(
     #     ctrl_end_pose(ctx.piper, end_pose_data, gripper_data)
 
     # [modified] send action data until it reaches chunk_size
+    counter = 0
+
     while not (len(ctx.policy._action_queue) < ctx.cfg.infer_chunk):
+        counter += 1
         end_pose_data = action_pred[:6].cpu().to(dtype=int).tolist()
         gripper_data = [action_pred[6].cpu().to(dtype=int), GRIPPER_EFFORT]
 
@@ -253,6 +256,10 @@ def llp_step(
 
         with torch.no_grad():
             action_pred = ctx.policy.select_action(batch).squeeze()
+
+        # print(f"[LLP] [{counter}] action_pred: ", action_pred)
+
+        time.sleep(0.2)
 
     ctx.policy.reset()
 
@@ -268,3 +275,5 @@ def llp_send_zero(ctx: LLPRuntimeContext):
     if ctx.cfg.use_devices and ctx.piper is not None:
         logging.info("[LLP] Sending zero configuration.")
         set_zero_configuration(ctx.piper)
+        time.sleep(4)
+        logging.info("[LLP] Done zero configuration.")
