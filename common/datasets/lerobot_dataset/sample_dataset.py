@@ -80,12 +80,12 @@ if __name__ == '__main__':
     # print(sample_target)
 
     # which episode you want to sample
-    sample_target = list(range(0, 50))
+    sample_target = list(range(0, 20))
     # or random sample
     # sample_target = generate_unique_random_numbers_in_intervals(0, 2759, 2160, 600)
 
     # directory to merge
-    target_dir = '/data/ghkim/press_the_RGB_button_ep150'
+    target_dir = '/data/ghkim/press_the_button_half'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
@@ -93,16 +93,18 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
     # merge dataset 1
-    data_dir = '/data/ghkim/press the red button/lerobot_5hz'
+    data_dir = '/data/ghkim/press_the_button_half/press the blue button/lerobot_5hz'
     sample_dataset(sample_target, data_dir, target_dir, 0)
 
     # merge dataset 2
-    data_dir = '/data/ghkim/press the green button/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 50)
+    data_dir = '/data/ghkim/press_the_button_half/press the green button/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 20)
 
     # merge dataset 3
-    data_dir = '/data/ghkim/press the blue button/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 100)
+    data_dir = '/data/ghkim/press_the_button_half/press the red button/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 40)
+
+    print(f"merged at {sample_target}")
 
 
     # data_dir = '/data/piper_pour/lerobot_5hz'
