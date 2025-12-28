@@ -170,7 +170,6 @@ def make_hlp_batch(processor, num_image, table_img, wrist_img, task: str, prev_m
         f"Previous_Memory: {prev_memory_str}\n"
         f"Available_LLP_Commands:\n{LLP_commands}"
         "Choose ONE command exactly as written above.\n"
-        "Return YAML with keys Progress, World_State, Command."
     )
 
     if int(num_image) == 1:
@@ -320,7 +319,7 @@ def main(
             # command = hlp_out.get("Command", "")
 
             # main이 prev_memory를 관리 (overwrite)
-            prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
+            prev_memory = f"Progress: {progress} | World_State: {world_state}"
 
             # -------- termination --------
             if command == "done":
