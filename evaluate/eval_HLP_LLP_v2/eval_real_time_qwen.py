@@ -9,22 +9,12 @@ from transformers import AutoProcessor, BitsAndBytesConfig, Qwen2_5_VLForConditi
 from peft import PeftModel
 
 
-HLP_HEADER_1 = (
-    "Role: High-Level Robot Policy.\n"
-    "Given the table view image and Previous_Memory, update the memory and choose the next atomic command.\n"
-    "- Only advance Progress when the event has occurred in the current frame.\n"
-    "- World_State should be concise and persistent (use None if no state).\n"
-    "- Command should be either the task command or \"done\" if finished.\n"
-    "Return YAML with keys Progress, World_State, Command."
-)
-
-HLP_HEADER_2 = (
-    "Role: High-Level Robot Policy.\n"
+HLP_HEADER = (
+    "Role: High-Level Planner (HLP).\n"
     "Given the two images and Previous_Memory, update the memory and choose the next atomic command.\n"
     "- Only advance Progress when the event has occurred in the current frame.\n"
     "- World_State should be concise and persistent (use None if no state).\n"
     "- Command should be either the task command or \"done\" if finished.\n"
-    "Return YAML with keys Progress, World_State, Command."
 )
 
 _YAML_KEYS = ("Progress", "World_State", "Command")

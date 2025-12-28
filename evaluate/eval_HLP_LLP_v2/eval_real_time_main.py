@@ -8,12 +8,11 @@ import argparse
 
 from pynput import keyboard
 import torch
-import numpy as np
 from PIL import Image
 
 from configs.default import DatasetConfig
 
-from evaluate.eval_HLP_LLP.eval_real_time_qwen import HLPQwen as HLPPolicy, HLP_HEADER_1, HLP_HEADER_2
+from evaluate.eval_HLP_LLP.eval_real_time_qwen import HLPQwen as HLPPolicy, HLP_HEADER
 from evaluate.eval_HLP_LLP.eval_real_time_pi0 import (
     LLPConfig, init_llp_runtime as init_llp, llp_step, llp_send_zero,
     capture_shared_observation, create_llp_batch_from_obs,
@@ -73,20 +72,6 @@ TASK_GROUPS = {
         },
         "default_key": "1",
     },
-    "wipe_the_window": {
-        "name": "wipe the bottom, middle, top part of the window in order",
-        "keymap": {
-            "1": "wipe the bottom, middle, top part of the window in order",
-        },
-        "prev_history": {
-            "1": "nothing wiped",
-        },
-        "LLP_commands" : {
-            "- wipe the bottom side of the window\n- wipe the middle side of the window\n- wipe the top side of the window\n- done\n"
-        },
-        "default_key": "1",
-    },
-
 }
 
 
@@ -137,72 +122,31 @@ def stop_keyboard_listener(st: KeyState):
     if hasattr(st, "_listener"):
         st._listener.stop()  # type: ignore
 
-def _tensor_1chw_to_pil(img: torch.Tensor) -> Image.Image:
-    """
-    img: torch.Tensor, shape (1,C,H,W) or (C,H,W), float in [0,1]
-    -> PIL RGB (uint8, HWC)
-    """
-    if img.ndim == 4:
-        img = img[0]  # (C,H,W)
-    img = img.detach().cpu()
 
-    # (C,H,W) -> (H,W,C)
-    img = img.permute(1, 2, 0).contiguous().numpy()
-
-    # [0,1] -> [0,255]
-    img = np.clip(img * 255.0, 0, 255).astype(np.uint8)
-    return Image.fromarray(img, mode="RGB")
-
-def make_hlp_batch(processor, num_image, table_img, wrist_img, task: str, prev_memory: Optional[str], LLP_commands):
+def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Optional[str]):
     """
     main에서 HLP 입력(batch)을 만든다.
     - 이미지 placeholder 2개 + 텍스트 프롬프트
     - Frame/Images 라인 없이 깔끔한 정책 프롬프트
     """
     prev_memory_str = prev_memory
-    print("previous memory : ", prev_memory_str)
 
-    HLP_HEADER = HLP_HEADER_1 if int(num_image) == 1 else HLP_HEADER_2
+    logging.info(prev_memory_str)
 
     user_text = (
         HLP_HEADER + "\n\n"
         f"Task: {task}\n"
         f"Previous_Memory: {prev_memory_str}\n"
-        f"Available_LLP_Commands:\n{LLP_commands}"
-        "Choose ONE command exactly as written above.\n"
     )
 
-    if int(num_image) == 1:
-        # Qwen2.5-VL style messages: 1 image + text
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ]
-
-    else:
-        # Qwen2.5-VL style messages: 2 images + text
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "image"},
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ]
-
-    table_pil = _tensor_1chw_to_pil(table_img)
-    if int(num_image) == 1:
-        images = [table_pil]
-    else:
-        wrist_pil = _tensor_1chw_to_pil(wrist_img)
-        images = [table_pil, wrist_pil]
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "image"},
+            {"type": "image"},
+            {"type": "text", "text": user_text},
+        ],
+    }]
 
     prompt = processor.tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
@@ -210,9 +154,10 @@ def make_hlp_batch(processor, num_image, table_img, wrist_img, task: str, prev_m
 
     batch = processor(
         text=[prompt],
-        images=images,
+        images=[table_img, wrist_img],
         padding=True,
         return_tensors="pt",
+        do_rescale=False,
     )
     return batch
 
@@ -222,7 +167,6 @@ def main(
     llp_cfg: LLPConfig,
     hlp_base_model: str,
     hlp_adapter: str,
-    num_image: int,
     device: str = "cuda:0",
 ):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
@@ -230,7 +174,6 @@ def main(
     tg = TASK_GROUPS[task_group_name]
     current_task = tg["keymap"][tg["default_key"]]
     current_history = tg["prev_history"][tg["default_key"]]
-    LLP_commands = tg["LLP_commands"]
     logging.info(f"[INIT] task_group={tg['name']} default_task='{current_task}' default_history='{current_history}'")
 
     # --- init runtimes ---
@@ -300,11 +243,9 @@ def main(
             # -------- HLP --------
             hlp_batch = make_hlp_batch(
                 processor=hlp.processor,
-                num_image=num_image,
                 table_img=table_img,
                 wrist_img=wrist_img,
                 task=current_task,
-                LLP_commands=LLP_commands,
                 prev_memory=prev_memory,
             )
 
@@ -319,7 +260,7 @@ def main(
             # command = hlp_out.get("Command", "")
 
             # main이 prev_memory를 관리 (overwrite)
-            prev_memory = f"Progress: {progress} | World_State: {world_state}"
+            prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
 
             # -------- termination --------
             if command == "done":
@@ -382,7 +323,6 @@ if __name__ == "__main__":
     # HLP (Qwen) config
     p.add_argument("--hlp_base_model", type=str, required=True, help="Base Qwen2.5-VL model path or repo id")
     p.add_argument("--hlp_adapter", type=str, required=True, help="Trained LoRA/QLoRA adapter path")
-    p.add_argument("--num_image", type=int, default=2)
     p.add_argument("--hlp_device", type=str, default="cuda:0")
     p.add_argument("--hlp_load_in_4bit", type=bool, default=True)
     p.add_argument("--hlp_max_new_tokens", type=int, default=128)
@@ -409,6 +349,5 @@ if __name__ == "__main__":
         llp_cfg=llp_cfg,
         hlp_base_model=args.hlp_base_model,
         hlp_adapter=args.hlp_adapter,
-        num_image=args.num_image,
         device=args.hlp_device,
     )
