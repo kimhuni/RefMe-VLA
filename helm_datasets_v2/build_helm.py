@@ -1,145 +1,150 @@
+# helm_datasets/build_helm.py (v2)
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Dict, Tuple
 
-from helm_datasets.utils.io_utils import ensure_dir, atomic_write_text
-from helm_datasets.core.data_index import scan_data_episodes
-from helm_datasets.core.registry import get_task_registry
-from helm_datasets.core.labeling import make_rows_for_variant
+from helm_datasets_v2.core.registry import get_task_registry
+from helm_datasets_v2.core.data_index import scan_data_episodes
+from helm_datasets_v2.core.labeling import make_rows_for_task
+from helm_datasets_v2.utils.io_utils import ensure_dir, atomic_write_text
 
+""" 1 image
+python -m helm_datasets.build_helm \
+  --out_root "/data/ghkim/helm_data_v2/press_the_button_N_times_ep60" \
+  --tasks press_blue_button_1 \
+  --num_image 1 \
+  --camera table \
+  --val_ratio 0.1 \
+  --shard_size 5000 \
+  --require_event
 """
 
-press N + m times: "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
-  
-################################################################################
+def _split_train_val_by_episode(episodes: List, val_ratio: float, seed: int) -> Tuple[List, List]:
+    rng = random.Random(seed)
+    idxs = list(range(len(episodes)))
+    rng.shuffle(idxs)
 
-export PYTHONPATH=$(pwd)
-python -m helm_datasets.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_button_N_times_ep60" \
-  --tasks "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
-  --val_ratio 0.1 \
-  --shard_size 5000
-  
-  
-export PYTHONPATH=$(pwd)
-python -m helm_datasets.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_button_N_times" \
-  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets/taskspecs" \
-  --val_ratio 0.1 \
-  --shard_size 5000
-"""
+    n_val = int(math.ceil(len(episodes) * val_ratio))
+    val_set = set(idxs[:n_val])
+
+    train_eps, val_eps = [], []
+    for i, ep in enumerate(episodes):
+        (val_eps if i in val_set else train_eps).append(ep)
+    return train_eps, val_eps
 
 
-def write_jsonl(path: Path, rows: List[dict]) -> None:
+def _shard_rows(rows: List[dict], shard_size: int) -> List[List[dict]]:
+    if shard_size <= 0:
+        return [rows]
+    return [rows[i:i + shard_size] for i in range(0, len(rows), shard_size)]
+
+
+def _write_jsonl(path: Path, rows: List[dict]) -> int:
     ensure_dir(path.parent)
-    with path.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
-
-def episode_split(
-    episodes: List[Tuple[str, str]],  # (chunk, episode)
-    seed: int,
-    val_ratio: float,
-) -> Tuple[set, set]:
-    keys = list(dict.fromkeys(episodes))
-    rnd = random.Random(seed)
-    rnd.shuffle(keys)
-    n_val = int(len(keys) * val_ratio)
-    val = set(keys[:n_val])
-    train = set(keys[n_val:])
-    return train, val
+    lines = [json.dumps(r, ensure_ascii=False) for r in rows]
+    atomic_write_text(path, "\n".join(lines) + ("\n" if lines else ""))
+    return len(rows)
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out_root", type=str, required=True)
-    ap.add_argument("--taskspecs_dir", type=str, default="/home/ghkim/codes/RefMe-VLA/helm_datasets/taskspecs")
-    ap.add_argument("--tasks", type=str, default=None, help="Comma-separated task_ids to build")
-    ap.add_argument("--require_event", type=int, default=1)
-    ap.add_argument("--cameras", type=str, default="table,wrist")
-    ap.add_argument("--seed", type=int, default=1234)
-    ap.add_argument("--val_ratio", type=float, default=0.1)
-    ap.add_argument("--shard_size", type=int, default=5000)
-    args = ap.parse_args()
+    p = argparse.ArgumentParser()
+
+    p.add_argument("--out_root", type=str, required=True, help="HeLM root: frames_1hz/... + episode jsons")
+    p.add_argument("--tasks", type=str, nargs="*", default=None, help="task_ids; default=all")
+    p.add_argument("--seed", type=int, default=1234)
+    p.add_argument("--val_ratio", type=float, default=0.1)
+    p.add_argument("--shard_size", type=int, default=5000)
+    p.add_argument("--require_event", action="store_true", help="skip episodes without event_frame_idx")
+
+    # image views
+    p.add_argument("--num_image", type=int, default=2, choices=[1, 2], help="use 1 or 2 camera images")
+    p.add_argument("--camera", type=str, default="auto", choices=["auto", "table", "wrist"],
+                   help="if n_images=1, choose which camera; auto=table")
+
+    args = p.parse_args()
 
     out_root = Path(args.out_root)
-    taskspecs_dir = Path(args.taskspecs_dir) if args.taskspecs_dir else None
-    cameras = [c.strip() for c in args.cameras.split(",") if c.strip()]
-    require_event = bool(args.require_event)
+    reg = get_task_registry()
 
-    episodes = scan_data_episodes(out_root=out_root, cameras=cameras, require_event=require_event)
+    task_ids = sorted(reg.keys()) if not args.tasks else args.tasks
+    episodes = scan_data_episodes(out_root)
+
     if not episodes:
-        raise RuntimeError("No data episodes found. Did you run extract_frames + annotate_app?")
+        raise RuntimeError(f"No episodes found under out_root={out_root}")
 
-    reg = get_task_registry(taskspecs_dir=taskspecs_dir, tasks=args.tasks, allow_task_ids=args.tasks)
-    if not reg:
-        raise RuntimeError("No taskspecs loaded.")
+    # episode 단위 split
+    train_eps, val_eps = _split_train_val_by_episode(episodes, args.val_ratio, args.seed)
 
-    ep_keys = [(ep.chunk, ep.episode) for ep in episodes]
-    train_set, val_set = episode_split(ep_keys, seed=args.seed, val_ratio=args.val_ratio)
+    # output root
+    jsonl_root = out_root / "jsonl_v2"
+    ensure_dir(jsonl_root)
 
-    out_jsonl_dir = out_root / "jsonl"
-    ensure_dir(out_jsonl_dir)
+    total = 0
+    for task_id in task_ids:
+        if task_id not in reg:
+            raise KeyError(f"Unknown task_id='{task_id}'. Available: {sorted(reg.keys())[:20]} ...")
+        spec = reg[task_id]
+        spec.validate()
 
-    for task_id, task in reg.items():
-        task.validate()
+        # v2 rows
+        buckets = make_rows_for_task(
+            task_id=task_id,
+            spec=spec,
+            train_episodes=train_eps,
+            val_episodes=val_eps,
+            require_event=bool(args.require_event),
+            num_image=int(args.num_image),
+            camera=str(args.camera),
+        )
+        # buckets: {"detect":{"train":[...], "val":[...]}, "update":{...}}
 
-        train_rows: List[dict] = []
-        val_rows: List[dict] = []
+        task_dir = jsonl_root / task_id
+        detect_dir = task_dir / "detect"
+        update_dir = task_dir / "update"
+        ensure_dir(detect_dir)
+        ensure_dir(update_dir)
 
-        for inter in range(task.max_inter + 1):
-            filt = task.episode_filters[inter] if task.episode_filters else {}
-            wanted_tasks = filt.get("tasks", None) if isinstance(filt, dict) else None
+        def write_split(mode_dir: Path, split_name: str, rows: List[dict]) -> int:
+            cnt = 0
+            for i, shard in enumerate(_shard_rows(rows, args.shard_size)):
+                cnt += _write_jsonl(mode_dir / f"{split_name}-{i:05d}.jsonl", shard)
+            return cnt
 
-            pool = episodes if wanted_tasks is None else [ep for ep in episodes if ep.tasks == wanted_tasks]
-
-            for ep in pool:
-                for base_intra in range(0, task.max_intra[inter]):
-                    rows = make_rows_for_variant(ep=ep, task=task, inter=inter, base_intra=base_intra, cameras=cameras)
-                    if (ep.chunk, ep.episode) in val_set:
-                        val_rows.extend(rows)
-                    else:
-                        train_rows.extend(rows)
-
-        task_dir = out_jsonl_dir / task_id
-        ensure_dir(task_dir)
-
-        def shard(rows: List[dict], split: str) -> None:
-            if not rows:
-                return
-            for i in range(0, len(rows), args.shard_size):
-                shard_rows = rows[i : i + args.shard_size]
-                p = task_dir / f"{split}-{i//args.shard_size:05d}.jsonl"
-                write_jsonl(p, shard_rows)
-
-        shard(train_rows, "train")
-        shard(val_rows, "val")
+        n_dt = write_split(detect_dir, "train", buckets["detect"]["train"])
+        n_dv = write_split(detect_dir, "val", buckets["detect"]["val"])
+        n_ut = write_split(update_dir, "train", buckets["update"]["train"])
+        n_uv = write_split(update_dir, "val", buckets["update"]["val"])
 
         meta = {
             "task_id": task_id,
-            "num_data_episodes_total": len(episodes),
-            "num_rows_train": len(train_rows),
-            "num_rows_val": len(val_rows),
-            "val_ratio": args.val_ratio,
-            "cameras": cameras,
-            "require_event": require_event,
-            "schema": {
-                "assistant": "YAML (Progress, World_State, Command)",
-                "world_state_type": "string_or_null",
-                "done_included": True,
-                "framewise_intra": "t < event => base_intra, else base_intra+1",
+            "schema_version": "v2",
+            "counts": {
+                "detect_train": n_dt,
+                "detect_val": n_dv,
+                "update_train": n_ut,
+                "update_val": n_uv,
             },
+            "images": {
+                "n_images": int(args.n_images),
+                "camera": str(args.camera),
+            },
+            "prev_memory_format": "Progress: ... | World_State: ...",
+            "detect_output_keys": ["Event_Detected", "Command"],
+            "update_output_keys": ["Progress", "World_State"],
+            "llp_command": spec.llp_command,
+            "init_memory": spec.init_memory,
         }
         atomic_write_text(task_dir / "meta.json", json.dumps(meta, ensure_ascii=False, indent=2))
 
-        print(f"[{task_id}] train={len(train_rows)} val={len(val_rows)} -> {task_dir}")
+        total += (n_dt + n_dv + n_ut + n_uv)
+        print(f"[v2] {task_id}: detect {n_dt}/{n_dv}, update {n_ut}/{n_uv}")
 
-    print("Done.")
+    print(f"Done. Total rows: {total}")
 
 
 if __name__ == "__main__":

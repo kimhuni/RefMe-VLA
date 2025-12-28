@@ -1,100 +1,166 @@
+# helm_datasets/core/labeling.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List
 
-from .data_index import DataEpisode
-from .spec import TaskSpec
-from .templates import render_user_prompt, render_assistant_yaml
-
-
-def intra_for_frame(t: int, event_frame_idx: int, base_intra: int, max_intra: int) -> int:
-    intra = base_intra if t < event_frame_idx else base_intra + 1
-    return max(0, min(intra, max_intra))
-
-
-def merge_world_state_on_done(world_state: Optional[str], progress: str) -> Optional[str]:
-    return world_state
-    #suffix = f"final_progress = {progress}"
-    #if world_state is None or str(world_state).strip().lower() == "none" or str(world_state).strip() == "":
-    #    return suffix
-    #return f"{world_state}; {suffix}"
+from helm_datasets_v2.core.spec import TaskSpec
+from helm_datasets_v2.core.templates import (
+    make_prev_memory,
+    render_user_prompt_detect,
+    render_user_prompt_update,
+    render_assistant_yaml_detect,
+    render_assistant_yaml_update,
+)
 
 
-def make_previous_memory_text(progress: str, world_state: Optional[str]) -> str:
-    if world_state is None:
-        return f"Progress: {progress}"
-    return f"Progress: {progress} | World_State: {world_state}"
+def _frame_path(cam_dir: Path, frame_idx: int) -> str:
+    return str(cam_dir / f"frame_{frame_idx:06d}.jpg")
 
 
-def make_uid(task_id: str, chunk: str, episode: str, inter: int, base_intra: int, frame_idx: int) -> str:
-    return f"{task_id}@{chunk}-{episode}-inter{inter}-base{base_intra}-f{frame_idx:06d}"
+def _select_views(num_image: int, camera: str) -> List[str]:
+    if num_image == 2:
+        return ["table", "wrist"]
+    # n_images == 1
+    if camera == "wrist":
+        return ["wrist"]
+    # auto or table
+    return ["table"]
 
 
-def make_rows_for_variant(
-    ep: DataEpisode,
-    task: TaskSpec,
-    inter: int,
-    base_intra: int,
-    cameras: List[str],
-) -> List[Dict[str, Any]]:
-    max_intra = task.max_intra[inter]
-    if base_intra < 0 or base_intra + 1 > max_intra:
-        raise ValueError(
-            f"Invalid base_intra={base_intra} for task={task.task_id} inter={inter} max_intra={max_intra}"
-        )
-
-    task_text = task.get_task_text(inter)
-    ws = task.get_world_state(inter)
-
-    rows: List[Dict[str, Any]] = []
-    for t in range(ep.n_frames):
-        # Output state for the current frame
-        out_intra = intra_for_frame(t, ep.event_frame_idx, base_intra, max_intra)
-
-        # Input state (Previous_Memory) is 1-step lagged.
-        # For the first frame, we set in_intra = out_intra (no prior frame exists).
-        if t == 0:
-            in_intra = out_intra
+def _images_for_episode(ep, frame_idx: int, views: List[str]) -> Dict[str, str]:
+    out = {}
+    for v in views:
+        if v == "table":
+            out["table"] = _frame_path(ep.table_dir, frame_idx)
+        elif v == "wrist":
+            out["wrist"] = _frame_path(ep.wrist_dir, frame_idx)
         else:
-            in_intra = intra_for_frame(t - 1, ep.event_frame_idx, base_intra, max_intra)
+            raise ValueError(f"Unknown view: {v}")
+    return out
 
-        # Previous memory comes from the *input* (lagged) state.
-        in_progress = task.get_progress(inter, in_intra)
-        in_world_state = ws  # keep raw ws for memory; do not apply done-merge here
-        previous_memory = make_previous_memory_text(progress=in_progress, world_state=in_world_state)
 
-        # Assistant output corresponds to the *current* state.
-        command = task.get_command(inter, out_intra)
-        progress = task.get_progress(inter, out_intra)
+def make_rows_for_task(
+    task_id: str,
+    spec: TaskSpec,
+    train_episodes: List,
+    val_episodes: List,
+    require_event: bool,
+    num_image: int,
+    camera: str,
+) -> Dict[str, Dict[str, List[dict]]]:
+    """
+    returns:
+      {
+        "detect": {"train":[...], "val":[...]},
+        "update": {"train":[...], "val":[...]},
+      }
+    """
+    views = _select_views(num_image=num_image, camera=camera)
 
-        world_state = ws
-        if command == "done":
-            world_state = merge_world_state_on_done(ws, progress)
+    buckets = {
+        "detect": {"train": [], "val": []},
+        "update": {"train": [], "val": []},
+    }
 
-        images = ep.get_frame_paths(cameras=cameras, t=t)
-        user_text = render_user_prompt(task_text=task_text, previous_memory=previous_memory, images=images, frame_idx=t)
-        assistant_text = render_assistant_yaml(progress=progress, world_state=world_state, command=command)
+    def add_episode(ep, split: str):
+        ev = getattr(ep, "event_frame_idx", None)
+        n_frames = int(getattr(ep, "n_frames", 0) or 0)
+        if n_frames <= 0:
+            return
+        if require_event and ev is None:
+            return
 
-        rows.append(
-            {
-                "uid": make_uid(task.task_id, ep.chunk, ep.episode, inter, base_intra, t),
-                "task_id": task.task_id,
-                "chunk": ep.chunk,
-                "episode": ep.episode,
-                "inter": inter,
-                "base_intra": base_intra,
-                "frame_idx": t,
-                "event_frame_idx": ep.event_frame_idx,
-                "images": images,
-                "conversations": [
-                    {"from": "user", "value": user_text},
-                    {"from": "assistant", "value": assistant_text},
-                ],
-                "meta": {
-                    "data_episode_tasks": ep.tasks,
-                    "episode_index": ep.episode_index,
-                },
-            }
-        )
+        for inter in range(spec.max_inter + 1):
+            task_text = spec.get_task_text(inter)
+            ws = spec.get_world_state(inter)
 
-    return rows
+            max_base = spec.max_intra[inter]
+            for base_intra in range(0, max_base):
+                # before/after progress
+                prog_before = spec.progress_grid[inter][base_intra]
+                prog_after = spec.progress_grid[inter][base_intra + 1]
+
+                # detect command before / after
+                cmd_before = spec.command_grid[inter][base_intra]
+                cmd_after = spec.command_grid[inter][base_intra + 1]
+
+                # -------- DETECT rows (all frames) --------
+                for f in range(n_frames):
+                    # event 이후 프레임은 이미 업데이트된 상태를 previous_memory로 본다
+                    if ev is not None and f > ev:
+                        mem_prog = prog_after
+                        cmd = cmd_after
+                    else:
+                        mem_prog = prog_before
+                        cmd = cmd_before
+
+                    prev_mem = make_prev_memory(mem_prog, ws)
+                    event_detected = (ev is not None and f == ev)
+
+                    user_prompt = render_user_prompt_detect(
+                        task_text=task_text,
+                        llp_command=spec.get_llp_command(),
+                        prev_memory=prev_mem,
+                    )
+                    gt_text = render_assistant_yaml_detect(event_detected, cmd)
+
+                    row = {
+                        "uid": f"{task_id}@{ep.chunk}-{ep.episode}-inter{inter}-base{base_intra}-f{f:06d}-detect",
+                        "mode": "detect",
+                        "task_id": task_id,
+                        "chunk": ep.chunk,
+                        "episode": ep.episode,
+                        "inter": inter,
+                        "base_intra": base_intra,
+                        "frame_idx": f,
+                        "event_frame_idx": ev,
+                        "views": views,
+                        "images": _images_for_episode(ep, f, views),
+                        "user_prompt": user_prompt,
+                        "gt_text": gt_text,
+                        "meta": {
+                            "data_episode_tasks": getattr(ep, "tasks", None),
+                            "episode_index": getattr(ep, "episode_index", None),
+                        },
+                    }
+                    buckets["detect"][split].append(row)
+
+                # -------- UPDATE row (only event frame) --------
+                if ev is None:
+                    continue
+
+                prev_mem_u = make_prev_memory(prog_before, ws)
+                user_prompt_u = render_user_prompt_update(
+                    task_text=task_text,
+                    prev_memory=prev_mem_u,
+                )
+                gt_text_u = render_assistant_yaml_update(prog_after, ws)
+
+                row_u = {
+                    "uid": f"{task_id}@{ep.chunk}-{ep.episode}-inter{inter}-base{base_intra}-f{ev:06d}-update",
+                    "mode": "update",
+                    "task_id": task_id,
+                    "chunk": ep.chunk,
+                    "episode": ep.episode,
+                    "inter": inter,
+                    "base_intra": base_intra,
+                    "frame_idx": ev,
+                    "event_frame_idx": ev,
+                    "views": views,
+                    "images": _images_for_episode(ep, ev, views),
+                    "user_prompt": user_prompt_u,
+                    "gt_text": gt_text_u,
+                    "meta": {
+                        "data_episode_tasks": getattr(ep, "tasks", None),
+                        "episode_index": getattr(ep, "episode_index", None),
+                    },
+                }
+                buckets["update"][split].append(row_u)
+
+    for ep in train_episodes:
+        add_episode(ep, "train")
+    for ep in val_episodes:
+        add_episode(ep, "val")
+
+    return buckets

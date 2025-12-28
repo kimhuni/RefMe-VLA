@@ -6,7 +6,6 @@
   "episode_filters" : [
     {"tasks": "wipe the bottom side of the window"}
   ],
-  "llp_commands": "- wipe the bottom side of the window\n- wipe the middle side of the window\n- wipe the top side of the window",
   "max_inter": 0,
   "max_intra": [1],
   "command_grid": [
