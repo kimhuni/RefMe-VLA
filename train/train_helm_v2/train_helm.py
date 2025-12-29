@@ -24,15 +24,15 @@ python train/train_helm_v2/train_helm.py \
   --frames_root "/data/ghkim/helm_data/wipe_the_window" \
   --camera table \
   --num_images 1 \
-  --output_dir "/result/ghkim/HLP_HeLM_v2_wipe_the_window_1229" \
+  --output_dir "/result/ghkim/HLP_HeLM_v2_wipe_the_window_1230" \
   --use_qlora 1 \
-  --per_device_train_batch_size 4 \
-  --per_device_eval_batch_size 4 \
+  --per_device_train_batch_size 6 \
+  --per_device_eval_batch_size 6 \
   --eval_steps 50 \
   --save_steps 200 \
   --max_steps 2000 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v2_wipe_the_window_1229
+  --wandb_run_name HLP_HeLM_v2_wipe_the_window_1230_up
 """
 
 def count_parameters(model) -> tuple[int, int, float]:

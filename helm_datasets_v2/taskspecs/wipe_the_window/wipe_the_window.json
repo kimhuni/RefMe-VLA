@@ -3,7 +3,7 @@
   "inter": 0,
   "intra": [3],
   "task_text": [
-    "wipe the bottom, middle, top part of the window in order"
+    "wipe the bottom, middle, top part of the window in order. each part of the window is wiped from left to right."
   ],
   "episode_filters" : [
     [

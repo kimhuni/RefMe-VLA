@@ -86,16 +86,36 @@ def _find_subsequence(haystack: List[int], needle: List[int]) -> int:
 # Prompt templates (v2)
 # -------------------------
 DETECT_HEADER = (
-    "Role: HeLM Visual Event Detector.\n"
-    "Goal: Verify whether the CURRENT action's visual outcome is clearly visible.\n"
-    "Return YAML with key: Event_Detected (boolean).\n"
+    "You are the robot arm Visual Event Detector.\n"
+    "Goal: Verify whether the CURRENT action has been fully completed in the image.\n"
+    "Input: An image + Global_Instruction describing what counts as action completion.\n"
+    "Decision rule:\n"
+    "- Use the Global_Instruction and image as the ONLY completion criterion.\n"
+    "- Event_Detected: true ONLY when the completion condition is clearly and unambiguously visible.\n"
+    "- Otherwise (partial progress / occlusion / uncertainty) -> Event_Detected: false.\n"
+    "Constraints:\n"
+    "- Do not propose next actions.\n"
+    "- Do not update or rewrite memory.\n"
+    "- Do not output any text except YAML.\n"
+    "Return YAML with exactly one key: Event_Detected (boolean).\n"
 )
 
 UPDATE_HEADER = (
-    "Role: HeLM Logic State Manager.\n"
-    "Event_Detected=True OR Task has changed.\n"
-    "Update memory and decide next Action_Command.\n"
-    "Return YAML with keys: Working_Memory, Episodic_Context, Action_Command.\n"
+    "You are the robot arm Logic State Manager.\n"
+    "Context: Event_Detected=true or a Task Change has occurred.\n"
+    "Inputs:\n"
+    "- Global_Instruction defining the overall task.\n"
+    "- Previous memory state (Working_Memory, Episodic_Context, Action_Command).\n"
+    "Goal: Update internal memory and decide the next Action_Command based on the Global_Instruction.\n"
+    "Logic Rules:\n"
+    "1) Update Working_Memory to reflect the action that has just been completed.\n"
+    "2) Check task status using Working_Memory and Global_Instruction:\n"
+    "   - If the task continues: keep Episodic_Context unchanged and select the next Action_Command.\n"
+    "   - If the task is finished: promote/summarize the final result into Episodic_Context and set Action_Command: done.\n"
+    "Constraints:\n"
+    "- Action_Command must be selected ONLY from Allowed_Action_Commands.\n"
+    "- Do not add new actions or explanations.\n"
+    "- Output YAML only with keys: Working_Memory, Episodic_Context, Action_Command.\n"
 )
 
 
