@@ -1,0 +1,40 @@
+{
+  "task_id": "wipe_the_window",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "wipe the bottom, middle, top part of the window in order"
+  ],
+  "episode_filters" : [
+    [
+      {"tasks": "wipe the bottom side of the window"},
+      {"tasks": "wipe the middle side of the window"},
+      {"tasks": "wipe the top side of the window"}
+    ]
+  ],
+  "llp_commands": "wipe the bottom side of the window\n wipe the middle side of the window\n wipe the top side of the window\n done",
+  "memory_grid": [
+  [
+    {
+      "Action_Command": "wipe the bottom side of the window",
+      "Working_Memory": "nothing wiped",
+      "Episodic_Context": "None"
+    },
+    {
+      "Action_Command": "wipe the middle side of the window",
+      "Working_Memory": "bottom wiped",
+      "Episodic_Context": "None"
+    },
+    {
+      "Action_Command": "wipe the top side of the window",
+      "Working_Memory": "bottom, middle wiped",
+      "Episodic_Context": "None"
+    },
+    {
+      "Action_Command": "done",
+      "Working_Memory": "task done (None)",
+      "Episodic_Context": "bottom, middle, top wiped"
+    }
+  ]
+]
+}

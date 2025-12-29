@@ -1,27 +1,64 @@
 {
   "task_id": "press_blue_button_3+2",
-
-  "max_inter": 1,
-  "max_intra": [3, 2],
-
+  "inter": 1,
+  "intra": [3, 2],
   "task_text": [
     "press the blue button three times",
     "press the blue button five times in total"
   ],
   "episode_filters" : [
-    {"tasks": "press the blue button"},
-    {"tasks": "press the blue button"}
+    [
+      {"tasks": "press the blue button"},
+      {"tasks": "press the blue button"},
+      {"tasks": "press the blue button"}
+    ],
+    [
+      {"tasks": "press the blue button"},
+      {"tasks": "press the blue button"}
+    ]
   ],
-  "command_grid": [
-    ["press the blue button", "press the blue button", "press the blue button", "done"],
-    ["press the blue button", "press the blue button", "done"]
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 0 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 1 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 2 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Total: 3"
+      }
+    ],
+    [
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 0 (Goal: 2)",
+        "Episodic_Context": "Previous_Total: 3"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 1 (Goal: 2)",
+        "Episodic_Context": "Previous_Total: 3"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done",
+        "Episodic_Context": "Previous_Total: 5"
+      }
+    ]
   ],
-  "progress_grid":[
-    ["0/3 Pressed", "1/3 Pressed", "2/3 Pressed", "3/3 Pressed"],
-    ["0/2 Pressed", "1/2 Pressed", "2/2 Pressed"]
-  ],
-  "world_state_grid": [
-    "None",
-    "previous_pressed: 3"
-  ]
+  "require_event": true,
+  "event_schema": {"event_frames_key": "event_frames"},
+  "sampling": {"detect": {"camera": "table", "negatives_per_positive": 3, "min_gap": 1}}
 }

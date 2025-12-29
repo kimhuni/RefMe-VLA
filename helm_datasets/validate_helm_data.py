@@ -17,7 +17,7 @@ except Exception:
 
 """
 export PYTHONPATH=$(pwd)
-streamlit run helm_datasets/validate_helm_data.py
+streamlit run helm_datasets_v2/validate_helm_data.py
 """
 
 # -------------------------

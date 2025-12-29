@@ -10,10 +10,10 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 """
 # 전부 병합
-python helm_datasets/merge_helm_data.py \
-  --jsonl_root /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl \
-  --out_dir   /data/ghkim/helm_data/press_the_button_N_times_ep60/jsonl/merged/press_1+2+3 \
-  --tasks "press_blue_button_1+1","press_blue_button_1+2","press_blue_button_1+3","press_blue_button_2+1","press_blue_button_2+2","press_blue_button_2+3","press_blue_button_3+1","press_blue_button_3+2","press_blue_button_3+3" \
+python helm_datasets_v2/merge_helm_data.py \
+  --jsonl_root /data/ghkim/helm_data/wipe_the_window/jsonl_v2 \
+  --out_dir   /data/ghkim/helm_data/wipe_the_window/jsonl_v2/merged/wipe_the_window \
+  --tasks wipe_the_window \
   --split_mode keep \
   --shard_size 0
   
@@ -26,8 +26,16 @@ python merge_helm_jsonl.py \
 """
 
 def iter_jsonl_files(task_dir: Path, split: str) -> List[Path]:
-    # task_dir/train-00000.jsonl 형태
-    files = sorted(task_dir.glob(f"{split}-*.jsonl"))
+    """
+    Find jsonl shards for a split under a task directory.
+
+    Supports both layouts:
+      - {task_dir}/{split}-00000.jsonl
+      - {task_dir}/detect/{split}-00000.jsonl
+      - {task_dir}/update/{split}-00000.jsonl
+      - any deeper nesting under task_dir
+    """
+    files = sorted(task_dir.rglob(f"{split}-*.jsonl"))
     return files
 
 def iter_rows(files: List[Path]) -> Iterable[dict]:
@@ -193,6 +201,11 @@ def main():
             task_id = td.name
             files = iter_jsonl_files(td, split)
             if not files:
+                # e.g., task_dir may have only train or only val
+                # or split shards might be stored elsewhere.
+                # Keep silent behavior but make it debuggable when needed.
+                # (uncomment next line if you want verbose logs)
+                # print(f"[warn] no {split} jsonl under: {td}")
                 continue
             rows = list(iter_rows(files))
             w = weights.get(task_id, 1.0)
