@@ -24,7 +24,7 @@ def build_update_user_text(
     update_header: str,
     global_instruction: str,
     memory_in: Dict[str, Any],
-    allowed_actions: Optional[List[str]] = None,
+    allowed: str = None,
 ) -> str:
     user = (
         update_header
@@ -33,9 +33,12 @@ def build_update_user_text(
         + "\n\nPrev_Memory:\n"
         + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
     )
-    if allowed_actions is not None:
+    if allowed is not None:
         user += "\n\nAllowed_Action_Commands:\n"
-        user += "\n".join([f"- {str(x)}" for x in allowed_actions])
+        if isinstance(allowed, list):
+            user += "\n".join([f"- {str(x)}" for x in allowed])
+        else:
+            user += str(allowed)
     return user
 
 

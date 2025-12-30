@@ -48,7 +48,7 @@ class TaskSpecRuntime:
     task_id: str
     task_text: List[str]                  # len 1 or 2
     init_memory: Dict[str, Any]           # dict includes Action_Command
-    allowed_actions: List[str]            # list of allowed action commands
+    allowed_actions: str            # list of allowed action commands
 
 
 def _make_dummy_table_image(size: Tuple[int, int] = (224, 224)) -> Image.Image:
@@ -84,18 +84,14 @@ def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str,
             continue
         task_text = [str(x).strip() for x in tt if str(x).strip()]
 
-        init_mem = raw.get("init_memory", None)
+        mem_grid = raw.get("memory_grid", None)
+        init_mem = mem_grid[0][0]
         if not isinstance(init_mem, dict):
             logger.warning(f"[TASKSPEC] init_memory must be dict in {p} (task_id={tid})")
-            init_mem = {}
+            mem_grid = {}
 
         # allowed actions: llp_command_list 우선, 없으면 allowed_actions
-        allowed = raw.get("llp_command_list", None)
-        if allowed is None:
-            allowed = raw.get("allowed_actions", None)
-        if not isinstance(allowed, list):
-            allowed = []
-        allowed_actions = [str(x) for x in allowed]
+        allowed_actions = raw.get("llp_commands", None)
 
         # 필수: init_memory에 Action_Command 포함 (너가 확정한 (i))
         if "Action_Command" not in init_mem:
@@ -112,18 +108,65 @@ def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str,
     return out
 
 
-def _to_pil_from_tensor(img_t: torch.Tensor) -> Image.Image:
-    arr = img_t.detach().cpu().numpy()
-    if arr.ndim == 3 and arr.shape[0] in (1, 3):  # CHW
-        arr = np.transpose(arr, (1, 2, 0))
-    return Image.fromarray(arr.astype("uint8")).convert("RGB")
+
+def _to_pil_from_tensor(img_t) -> Image.Image:
+    """
+    Supports:
+      - torch.Tensor / np.ndarray
+      - shapes: (H,W,3), (3,H,W), (1,H,W), (B,C,H,W), (T,C,H,W), etc.
+    Returns RGB PIL.
+    """
+    if isinstance(img_t, torch.Tensor):
+        arr = img_t.detach().cpu().numpy()
+    else:
+        arr = np.array(img_t)
+
+    # 1) squeeze trivial dims (common: (1,1,H,W))
+    # but be careful not to squeeze away H/W
+    while arr.ndim >= 4 and arr.shape[0] == 1:
+        arr = arr[0]
+    while arr.ndim >= 4 and arr.shape[0] != 1 and arr.shape[0] not in (3,):
+        # If still 4D like (T,C,H,W), take first frame
+        arr = arr[0]
+
+    # Now handle 3D / 2D
+    if arr.ndim == 3:
+        # CHW -> HWC
+        if arr.shape[0] in (1, 3) and arr.shape[-1] not in (1, 3):
+            arr = np.transpose(arr, (1, 2, 0))
+
+        # if single channel -> expand to 3
+        if arr.shape[-1] == 1:
+            arr = np.repeat(arr, 3, axis=-1)
+
+        # if still not 3 channels, try best-effort
+        if arr.shape[-1] != 3:
+            raise ValueError(f"Unsupported image shape after processing: {arr.shape}")
+
+    elif arr.ndim == 2:
+        # grayscale -> RGB
+        arr = np.stack([arr, arr, arr], axis=-1)
+
+    else:
+        raise ValueError(f"Unsupported image ndim={arr.ndim}, shape={arr.shape}")
+
+    # dtype normalize
+    if arr.dtype != np.uint8:
+        # sometimes float 0..1 or 0..255
+        if arr.max() <= 1.0:
+            arr = (arr * 255.0).clip(0, 255).astype(np.uint8)
+        else:
+            arr = arr.clip(0, 255).astype(np.uint8)
+
+    return Image.fromarray(arr, mode="RGB")
+
 
 
 def eval_real_time_main_v2(
     hlp: HLPQwenV2,
     llp_cfg: LLPConfig,
     specs: Dict[str, TaskSpecRuntime],
-    task_group: str,
+    task_group: str = "1",
 ):
     llp_ctx: LLPRuntimeContext = init_llp_runtime(llp_cfg)
     listener, kstate = init_keyboard_listener(task_group)
@@ -158,7 +201,7 @@ def eval_real_time_main_v2(
                 current_memory = None
                 kstate["reset_episode"] = False
                 logger.info("[MAIN] episode reset -> GI=None, memory=None, inter=0")
-                time.sleep(0.05)
+                time.sleep(5)
 
             # numeric task select
             sel_tid = kstate.get("selected_task_id", None)
@@ -188,7 +231,7 @@ def eval_real_time_main_v2(
                             UPDATE_HEADER,
                             global_instruction=global_instruction,
                             memory_in=prev_mem,
-                            allowed_actions=new_spec.allowed_actions,
+                            allowed=new_spec.allowed_actions,
                         )
                         batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
                         t0 = time.time()
@@ -224,7 +267,7 @@ def eval_real_time_main_v2(
                             UPDATE_HEADER,
                             global_instruction=global_instruction,
                             memory_in=prev_mem,
-                            allowed_actions=spec.allowed_actions,
+                            allowed=spec.allowed_actions,
                         )
                         batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
                         t0 = time.time()
@@ -242,7 +285,8 @@ def eval_real_time_main_v2(
 
             # idle if no task
             if current_task_id is None or global_instruction is None or current_memory is None:
-                time.sleep(0.03)
+                print("nothing to do")
+                time.sleep(3)
                 continue
 
             # capture once
@@ -254,12 +298,13 @@ def eval_real_time_main_v2(
                 use_end_pose=True,
             )
             if table_img_t is None:
-                time.sleep(0.03)
+                time.sleep(0.3)
                 continue
 
             # detect uses real table image (1 image)
             table_pil = _to_pil_from_tensor(table_img_t)
 
+            # make DETECT batch
             user_d = build_detect_user_text(
                 DETECT_HEADER,
                 global_instruction=global_instruction,
@@ -268,18 +313,23 @@ def eval_real_time_main_v2(
             batch_d = create_hlp_detect_batch(hlp.processor, table_pil, user_d)
 
             t_detect0 = time.time()
+            # run DETECT
             event = hlp.detect(batch_d)
             t_detect = time.time() - t_detect0
 
-            # event -> update (dummy image)
+            # [event happen!] -> [UPDATE MODE] (dummy image)
             t_update = 0.0
             if event:
+                # send to original position
+                llp_send_zero(llp_ctx)
+
+                # UPDATE memory
                 spec = specs[current_task_id]
                 user_u = build_update_user_text(
                     UPDATE_HEADER,
                     global_instruction=global_instruction,
                     memory_in=current_memory,
-                    allowed_actions=spec.allowed_actions,
+                    allowed=spec.allowed_actions,
                 )
                 batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
                 t_up0 = time.time()
@@ -291,7 +341,7 @@ def eval_real_time_main_v2(
                     "Action_Command": upd.get("Action_Command", ""),
                 }
 
-            # LLP step uses Action_Command
+            # [LLP] step - Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
             if cmd:
                 llp_batch = create_llp_batch_from_obs(
@@ -302,14 +352,17 @@ def eval_real_time_main_v2(
                 )
                 t_pred, t_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
             else:
+                print("no action command")
                 t_llp = 0.0
 
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
             logger.info(
-                f"[MAIN] step={step} fps={fps:.2f} group='{task_group}' "
-                f"task_id='{current_task_id}' inter={current_inter_idx} event={event} "
-                f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s"
+                f"[MAIN] step={step} fps={fps:.2f} group='{task_group}' \n"
+                f"task_id='{current_task_id}' inter={current_inter_idx} event={event} \n"
+                f"current_memory = f{current_memory} \n"
+                f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s\n"
+                "=========================================================================================================================="
             )
 
     finally:

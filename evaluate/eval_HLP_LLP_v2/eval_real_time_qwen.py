@@ -156,9 +156,15 @@ class HLPQwenV2:
         return out_text
 
     def detect(self, batch: Dict[str, torch.Tensor]) -> bool:
+        print("[HLP]===DETECT MODE===")
         out_text = self._generate_text(batch, self.max_new_tokens_detect)
+        print("[HLP] raw output: \n", out_text)
+
         return parse_detect_yaml(out_text)
 
     def update(self, batch: Dict[str, torch.Tensor]) -> Dict[str, str]:
+        print("[HLP]===UPDATE MODE===")
         out_text = self._generate_text(batch, self.max_new_tokens_update)
+        print("[HLP] raw output: \n", out_text)
+
         return parse_update_yaml(out_text)

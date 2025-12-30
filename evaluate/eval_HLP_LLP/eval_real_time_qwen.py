@@ -112,7 +112,7 @@ class HLPQwen:
         model = PeftModel.from_pretrained(base, adapter_path)
         # inference에서는 merge 권장(속도/단순)
         self.model = model.merge_and_unload().eval()
-        print("[HLP] QLoRA merged")
+        print("[HLP] QLoRA merged :", adapter_path)
 
         print(f"[HLP] load done: {time.time()-t0:.2f}s")
 
@@ -139,6 +139,6 @@ class HLPQwen:
             clean_up_tokenization_spaces=False,
         )[0].strip()
 
-        print("raw_text: ", out_text)
+        print("[raw_text] \n", out_text)
 
         return parse_hlp_yaml(out_text)

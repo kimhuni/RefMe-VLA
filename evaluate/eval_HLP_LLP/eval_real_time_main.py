@@ -79,10 +79,10 @@ TASK_GROUPS = {
             "1": "wipe the bottom, middle, top part of the window in order",
         },
         "prev_history": {
-            "1": "nothing wiped",
+            "1": "Progress: nothing wiped | World_State: None",
         },
         "LLP_commands" : {
-            "- wipe the bottom side of the window\n- wipe the middle side of the window\n- wipe the top side of the window\n- done\n"
+            "wipe the bottom side of the window\nwipe the middle side of the window\nwipe the top side of the window\ndone\n"
         },
         "default_key": "1",
     },
@@ -170,6 +170,7 @@ def make_hlp_batch(processor, num_image, table_img, wrist_img, task: str, prev_m
         f"Previous_Memory: {prev_memory_str}\n"
         f"Available_LLP_Commands:\n{LLP_commands}"
         "Choose ONE command exactly as written above.\n"
+        "Return YAML with keys Progress, World_State, Command."
     )
 
     if int(num_image) == 1:
@@ -319,7 +320,7 @@ def main(
             # command = hlp_out.get("Command", "")
 
             # main이 prev_memory를 관리 (overwrite)
-            prev_memory = f"Progress: {progress} | World_State: {world_state}"
+            prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
 
             # -------- termination --------
             if command == "done":
