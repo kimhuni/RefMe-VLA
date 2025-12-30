@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from termcolor import colored
+import numpy as np
+import torch
 from PIL import Image
 
 from eval_real_time_qwen import HLPQwenV2, DETECT_HEADER, UPDATE_HEADER
@@ -29,192 +30,222 @@ from utils_batches import (
     create_hlp_update_batch,
 )
 
+logger = logging.getLogger(__name__)
+
 """
 python eval_real_time_main.py \
-  --taskspecs_dir /path/to/helm_datasets_v2/taskspecs \
-  --keymap_json /path/to/keymap_press.json \
+  --taskspecs_dir /Users/ghkim/codes/RefMe-VLA/helm_datasets_v2/taskspecs \
+  --task_group press_button_N_times_M_times_total \
   --hlp_base /path/to/Qwen2.5-VL \
-  --hlp_adapter /path/to/qlora_adapter \
+  --hlp_adapter /path/to/adapter \
   --llp_model_path /ckpt/pi0 \
-  --dataset_repo_id <...> \
-  --dataset_root <...> \
+  --dataset_root /path/to/lerobot \
   --use_devices
 """
 
 @dataclass
-class TaskRuntimeSpec:
+class TaskSpecRuntime:
     task_id: str
-    global_instruction: str
-    init_memory: Dict[str, Any]              # must include Action_Command
-    allowed_actions: List[str]               # Allowed_Action_Commands
-
-
-def _load_taskspecs_recursive(taskspecs_dir: str) -> Dict[str, Dict[str, Any]]:
-    root = Path(taskspecs_dir)
-    out: Dict[str, Dict[str, Any]] = {}
-    for p in sorted(root.rglob("*.json")):
-        try:
-            raw = json.loads(p.read_text(encoding="utf-8"))
-            tid = str(raw.get("task_id", "")).strip()
-            if not tid:
-                continue
-            out[tid] = raw
-        except Exception as e:
-            logging.warning(f"[TASKSPEC] failed to read {p}: {e}")
-    return out
-
-
-def _taskspec_to_runtime(ts: Dict[str, Any]) -> TaskRuntimeSpec:
-    tid = ts["task_id"]
-    # global_instruction: task_text[0] 우선
-    tt = ts.get("task_text", "")
-    if isinstance(tt, list) and tt:
-        gi = str(tt[0]).strip()
-    else:
-        gi = str(tt).strip()
-
-    init_mem = ts.get("init_memory", None)
-    if not isinstance(init_mem, dict):
-        # 최소 안전 기본값(하지만 너는 (i)로 init_memory에 Action_Command 포함한다고 했으니 보통 여길 안 탐)
-        init_mem = {
-            "Working_Memory": "",
-            "Episodic_Context": "",
-            "Action_Command": "",
-        }
-
-    allowed = ts.get("llp_command_list", None)
-    if allowed is None:
-        allowed = ts.get("allowed_actions", None)
-    if not isinstance(allowed, list):
-        allowed = []
-
-    return TaskRuntimeSpec(
-        task_id=tid,
-        global_instruction=gi,
-        init_memory=init_mem,
-        allowed_actions=[str(x) for x in allowed],
-    )
+    task_text: List[str]                  # len 1 or 2
+    init_memory: Dict[str, Any]           # dict includes Action_Command
+    allowed_actions: List[str]            # list of allowed action commands
 
 
 def _make_dummy_table_image(size: Tuple[int, int] = (224, 224)) -> Image.Image:
     return Image.new("RGB", size, color=(0, 0, 0))
 
 
+def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str, TaskSpecRuntime]:
+    """
+    taskspecs_dir/<task_group> 아래 모든 json 재귀 로드
+    """
+    root = Path(taskspecs_dir) / task_group
+    if not root.exists():
+        raise FileNotFoundError(f"Task group dir not found: {root}")
+
+    out: Dict[str, TaskSpecRuntime] = {}
+    for p in sorted(root.rglob("*.json")):
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning(f"[TASKSPEC] failed to read {p}: {e}")
+            continue
+
+        tid = str(raw.get("task_id", "")).strip()
+        if not tid:
+            logger.warning(f"[TASKSPEC] missing task_id in {p}")
+            continue
+
+        tt = raw.get("task_text", [])
+        if isinstance(tt, str):
+            tt = [tt]
+        if not isinstance(tt, list) or not tt:
+            logger.warning(f"[TASKSPEC] invalid task_text in {p} (task_id={tid})")
+            continue
+        task_text = [str(x).strip() for x in tt if str(x).strip()]
+
+        init_mem = raw.get("init_memory", None)
+        if not isinstance(init_mem, dict):
+            logger.warning(f"[TASKSPEC] init_memory must be dict in {p} (task_id={tid})")
+            init_mem = {}
+
+        # allowed actions: llp_command_list 우선, 없으면 allowed_actions
+        allowed = raw.get("llp_command_list", None)
+        if allowed is None:
+            allowed = raw.get("allowed_actions", None)
+        if not isinstance(allowed, list):
+            allowed = []
+        allowed_actions = [str(x) for x in allowed]
+
+        # 필수: init_memory에 Action_Command 포함 (너가 확정한 (i))
+        if "Action_Command" not in init_mem:
+            logger.warning(f"[TASKSPEC] init_memory missing Action_Command in {p} (task_id={tid})")
+
+        out[tid] = TaskSpecRuntime(
+            task_id=tid,
+            task_text=task_text,
+            init_memory=init_mem,
+            allowed_actions=allowed_actions,
+        )
+
+    logger.info(f"[TASKSPEC] loaded {len(out)} specs from group='{task_group}' at {root}")
+    return out
+
+
+def _to_pil_from_tensor(img_t: torch.Tensor) -> Image.Image:
+    arr = img_t.detach().cpu().numpy()
+    if arr.ndim == 3 and arr.shape[0] in (1, 3):  # CHW
+        arr = np.transpose(arr, (1, 2, 0))
+    return Image.fromarray(arr.astype("uint8")).convert("RGB")
+
+
 def eval_real_time_main_v2(
     hlp: HLPQwenV2,
     llp_cfg: LLPConfig,
-    tasks: Dict[str, TaskRuntimeSpec],
-    task_group_cfg: Dict[str, Any],
+    specs: Dict[str, TaskSpecRuntime],
+    task_group: str,
 ):
-    init_llp = True
     llp_ctx: LLPRuntimeContext = init_llp_runtime(llp_cfg)
+    listener, kstate = init_keyboard_listener(task_group)
 
-    # keyboard
-    listener, kstate = init_keyboard_listener(task_group_cfg)
-
-    # runtime state
-    global_instruction: Optional[str] = None
+    # runtime states
     current_task_id: Optional[str] = None
+    current_inter_idx: int = 0               # 0 or 1
+    global_instruction: Optional[str] = None
     current_memory: Optional[Dict[str, Any]] = None
 
     dummy_table = _make_dummy_table_image()
 
     step = 0
-    t0 = time.time()
+    t_start = time.time()
 
-    logging.info(colored("[MAIN] v2 realtime started", "green", attrs=["bold"]))
     try:
         while True:
-            # ---- quit ----
-            if kstate.get("quit", False):
-                logging.info("[MAIN] quit")
+            if kstate["quit"]:
+                logger.info("[MAIN] quit")
                 break
 
-            # ---- set zero ----
-            if kstate.get("set_zero", False):
+            # robot zero
+            if kstate["set_zero"]:
                 llp_send_zero(llp_ctx)
                 kstate["set_zero"] = False
 
-            # ---- reset hlp/llp (episode reset) ----
-            if kstate.get("reset_hlp_llp", False):
-                # episode boundary: memory is cleared and global_instruction None
-                global_instruction = None
+            # episode reset (0)
+            if kstate["reset_episode"]:
                 current_task_id = None
+                current_inter_idx = 0
+                global_instruction = None
                 current_memory = None
-                kstate["reset_hlp_llp"] = False
-                logging.info(colored("[MAIN] reset_hlp_llp: global_instruction=None, memory cleared", "cyan"))
+                kstate["reset_episode"] = False
+                logger.info("[MAIN] episode reset -> GI=None, memory=None, inter=0")
                 time.sleep(0.05)
 
-            # ---- task selection ----
-            sel = kstate.get("selected_task", None)  # keymap value (we expect task_id)
-            if sel is not None and sel != current_task_id:
-                # task changed by keyboard
-                prev_task_id = current_task_id
-                prev_gi = global_instruction
-                prev_mem = current_memory
+            # numeric task select
+            sel_tid = kstate.get("selected_task_id", None)
+            if sel_tid is not None:
+                kstate["selected_task_id"] = None
 
-                new_task_id = str(sel)
-                if new_task_id not in tasks:
-                    logging.warning(f"[MAIN] unknown task_id from keymap: {new_task_id}")
+                if sel_tid not in specs:
+                    logger.warning(f"[MAIN] selected task_id not found in loaded specs: {sel_tid}")
                 else:
-                    new_spec = tasks[new_task_id]
-                    new_gi = new_spec.global_instruction
+                    new_spec = specs[sel_tid]
 
-                    if prev_gi is None:
-                        # None -> new task: init_memory 그대로 사용 (UPDATE 호출 X)
-                        global_instruction = new_gi
-                        current_task_id = new_task_id
+                    if global_instruction is None:
+                        # None -> new: init_memory 사용, UPDATE 호출 X
+                        current_task_id = sel_tid
+                        current_inter_idx = 0
+                        global_instruction = new_spec.task_text[0]
                         current_memory = dict(new_spec.init_memory)
-                        logging.info(
-                            colored(
-                                f"[MAIN] task set (None->new): {new_task_id} | GI='{new_gi}' | init_memory used",
-                                "yellow",
-                                attrs=["bold"],
-                            )
-                        )
+                        logger.info(f"[MAIN] None->new task_id={sel_tid} inter=0 GI='{global_instruction}' (init_memory)")
                     else:
-                        # prev -> new: memory는 UPDATE로만 변경
-                        global_instruction = new_gi
-                        current_task_id = new_task_id
+                        # prev -> new: UPDATE 1회로 memory 변경 (init_memory 금지)
+                        prev_mem = current_memory if isinstance(current_memory, dict) else {}
+                        current_task_id = sel_tid
+                        current_inter_idx = 0
+                        global_instruction = new_spec.task_text[0]
 
-                        # UPDATE 1회: (prev memory + new GI) -> new memory
-                        user = build_update_user_text(
+                        user_u = build_update_user_text(
                             UPDATE_HEADER,
-                            global_instruction=new_gi,
-                            memory_in=prev_mem if isinstance(prev_mem, dict) else {},
+                            global_instruction=global_instruction,
+                            memory_in=prev_mem,
                             allowed_actions=new_spec.allowed_actions,
                         )
-                        # update는 dummy image
-                        batch = create_hlp_update_batch(hlp.processor, dummy_table, user)
-                        t_u0 = time.time()
-                        new_mem = hlp.update(batch)
-                        t_u = time.time() - t_u0
-
-                        # overwrite
+                        batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
+                        t0 = time.time()
+                        upd = hlp.update(batch_u)
+                        dt = time.time() - t0
                         current_memory = {
-                            "Working_Memory": new_mem.get("Working_Memory", ""),
-                            "Episodic_Context": new_mem.get("Episodic_Context", ""),
-                            "Action_Command": new_mem.get("Action_Command", ""),
+                            "Working_Memory": upd.get("Working_Memory", ""),
+                            "Episodic_Context": upd.get("Episodic_Context", ""),
+                            "Action_Command": upd.get("Action_Command", ""),
                         }
-
-                        logging.info(
-                            colored(
-                                f"[MAIN] task changed (prev->new): {prev_task_id} -> {new_task_id} | "
-                                f"UPDATE@change t={t_u:.3f}s | Action='{current_memory.get('Action_Command','')}'",
-                                "yellow",
-                                attrs=["bold"],
-                            )
+                        logger.info(
+                            f"[MAIN] prev->new task_id={sel_tid} inter=0 UPDATE@change {dt:.3f}s "
+                            f"Action='{current_memory.get('Action_Command','')}'"
                         )
 
-                # consume selection
-                kstate["selected_task"] = None
+            # next inter (n): same task_id, switch to task_text[1] if exists, UPDATE 한번
+            if kstate["next_inter"]:
+                kstate["next_inter"] = False
+                if current_task_id is None or global_instruction is None or current_memory is None:
+                    logger.info("[MAIN] next_inter ignored (no active task)")
+                else:
+                    spec = specs.get(current_task_id, None)
+                    if spec is None:
+                        logger.warning("[MAIN] next_inter: current_task_id spec not found")
+                    elif current_inter_idx + 1 >= len(spec.task_text):
+                        logger.info("[MAIN] next_inter: no further task_text (len<=1)")
+                    else:
+                        prev_mem = current_memory
+                        current_inter_idx += 1
+                        global_instruction = spec.task_text[current_inter_idx]
 
-            # ---- if no task yet, idle ----
-            if global_instruction is None or current_memory is None or current_task_id is None:
-                time.sleep(0.05)
+                        user_u = build_update_user_text(
+                            UPDATE_HEADER,
+                            global_instruction=global_instruction,
+                            memory_in=prev_mem,
+                            allowed_actions=spec.allowed_actions,
+                        )
+                        batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
+                        t0 = time.time()
+                        upd = hlp.update(batch_u)
+                        dt = time.time() - t0
+                        current_memory = {
+                            "Working_Memory": upd.get("Working_Memory", ""),
+                            "Episodic_Context": upd.get("Episodic_Context", ""),
+                            "Action_Command": upd.get("Action_Command", ""),
+                        }
+                        logger.info(
+                            f"[MAIN] next_inter -> inter={current_inter_idx} GI='{global_instruction}' "
+                            f"UPDATE {dt:.3f}s Action='{current_memory.get('Action_Command','')}'"
+                        )
+
+            # idle if no task
+            if current_task_id is None or global_instruction is None or current_memory is None:
+                time.sleep(0.03)
                 continue
 
-            # ---- capture shared obs once ----
+            # capture once
             state, table_img_t, wrist_img_t = capture_shared_observation(
                 piper=llp_ctx.piper,
                 table_rs_cam=llp_ctx.table_rs_cam,
@@ -223,88 +254,63 @@ def eval_real_time_main_v2(
                 use_end_pose=True,
             )
             if table_img_t is None:
-                # use_devices=False는 안 쓴다고 했지만, 안전하게 idle
-                time.sleep(0.05)
+                time.sleep(0.03)
                 continue
 
-            # table tensor -> PIL (HLP용)
-            # table_img_t shape: (H,W,3) or (3,H,W) depending on your camera wrapper.
-            # 여기서는 lerobot rs_cam.image_for_inference()가 반환하는 타입에 맞게 변환해야 함.
-            # 기존 코드에서는 processor에 PIL을 주는게 가장 안전하므로, 아래는 흔한 케이스 2개를 지원.
-            import numpy as np
-            import torch
+            # detect uses real table image (1 image)
+            table_pil = _to_pil_from_tensor(table_img_t)
 
-            if isinstance(table_img_t, torch.Tensor):
-                arr = table_img_t.detach().cpu().numpy()
-            else:
-                arr = np.array(table_img_t)
-
-            if arr.ndim == 3 and arr.shape[0] in (1, 3):  # CHW
-                arr = np.transpose(arr, (1, 2, 0))
-            table_pil = Image.fromarray(arr.astype("uint8")).convert("RGB")
-
-            # ---- HLP DETECT (real table img) ----
             user_d = build_detect_user_text(
                 DETECT_HEADER,
                 global_instruction=global_instruction,
                 memory_in=current_memory,
             )
-            b_d = create_hlp_detect_batch(hlp.processor, table_pil, user_d)
+            batch_d = create_hlp_detect_batch(hlp.processor, table_pil, user_d)
 
-            t_h0 = time.time()
-            event_detected = hlp.detect(b_d)
-            t_detect = time.time() - t_h0
+            t_detect0 = time.time()
+            event = hlp.detect(batch_d)
+            t_detect = time.time() - t_detect0
 
-            # ---- HLP UPDATE only if event=true ----
+            # event -> update (dummy image)
             t_update = 0.0
-            if event_detected:
-                spec = tasks[current_task_id]
+            if event:
+                spec = specs[current_task_id]
                 user_u = build_update_user_text(
                     UPDATE_HEADER,
                     global_instruction=global_instruction,
                     memory_in=current_memory,
                     allowed_actions=spec.allowed_actions,
                 )
-                b_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
-                t_u0 = time.time()
-                upd = hlp.update(b_u)
-                t_update = time.time() - t_u0
-
+                batch_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
+                t_up0 = time.time()
+                upd = hlp.update(batch_u)
+                t_update = time.time() - t_up0
                 current_memory = {
                     "Working_Memory": upd.get("Working_Memory", ""),
                     "Episodic_Context": upd.get("Episodic_Context", ""),
                     "Action_Command": upd.get("Action_Command", ""),
                 }
 
-            # ---- LLP step (always uses Action_Command) ----
+            # LLP step uses Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
-            if not cmd:
-                # 안전장치: 비어있으면 아무것도 하지 않음
-                time.sleep(0.05)
-                continue
-
-            llp_batch = create_llp_batch_from_obs(
-                state=state,
-                table_img=table_img_t,
-                wrist_img=wrist_img_t,
-                task=cmd,
-            )
-            t_pred, t_total_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
-
-            # ---- logging ----
-            step += 1
-            fps = step / max(1e-6, (time.time() - t0))
-            logging.info(
-                colored(
-                    f"[MAIN] step={step} fps={fps:.2f} task_id='{current_task_id}' "
-                    f"event={event_detected} cmd='{cmd}' "
-                    f"hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_total_llp:.3f}s",
-                    "magenta",
-                    attrs=["bold"],
+            if cmd:
+                llp_batch = create_llp_batch_from_obs(
+                    state=state,
+                    table_img=table_img_t,
+                    wrist_img=wrist_img_t,
+                    task=cmd,
                 )
-            )
+                t_pred, t_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
+            else:
+                t_llp = 0.0
 
-            time.sleep(0.02)
+            step += 1
+            fps = step / max(1e-6, (time.time() - t_start))
+            logger.info(
+                f"[MAIN] step={step} fps={fps:.2f} group='{task_group}' "
+                f"task_id='{current_task_id}' inter={current_inter_idx} event={event} "
+                f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s"
+            )
 
     finally:
         try:
@@ -320,13 +326,14 @@ if __name__ == "__main__":
 
     p = argparse.ArgumentParser()
     p.add_argument("--taskspecs_dir", type=str, required=True)
-    p.add_argument("--keymap_json", type=str, required=True, help="e.g. {'1':'task_id_a','2':'task_id_b'}")
+    p.add_argument("--task_group", type=str, required=True)
+
     p.add_argument("--hlp_base", type=str, required=True)
     p.add_argument("--hlp_adapter", type=str, required=True)
     p.add_argument("--hlp_device", type=str, default="cuda:0")
     p.add_argument("--hlp_attn", type=str, default="sdpa")
 
-    # LLP
+    # LLP args는 네 프로젝트 config에 맞게 유지
     p.add_argument("--llp_model_path", type=str, required=True)
     p.add_argument("--dataset_repo_id", type=str, default=None)
     p.add_argument("--dataset_root", type=str, default=None)
@@ -337,14 +344,7 @@ if __name__ == "__main__":
     p.add_argument("--max_steps", type=int, default=1000000)
     args = p.parse_args()
 
-    # load taskspecs
-    raw_specs = _load_taskspecs_recursive(args.taskspecs_dir)
-    tasks = {tid: _taskspec_to_runtime(ts) for tid, ts in raw_specs.items()}
-    logging.info(f"[MAIN] loaded taskspecs: {len(tasks)}")
-
-    # keymap json
-    keymap = json.loads(Path(args.keymap_json).read_text(encoding="utf-8"))
-    task_group_cfg = {"keymap": keymap}
+    specs = _load_taskspecs_from_group(args.taskspecs_dir, args.task_group)
 
     # HLP
     hlp = HLPQwenV2(
@@ -355,7 +355,7 @@ if __name__ == "__main__":
         load_in_4bit=True,
     )
 
-    # LLP cfg (필요한 DatasetConfig는 네 프로젝트 configs에 맞춰 연결해야 함)
+    # LLP cfg (네 프로젝트의 DatasetConfig 경로에 맞춰 수정 필요)
     from configs.default import DatasetConfig
     llp_cfg = LLPConfig(
         train_dataset=DatasetConfig(repo_id=args.dataset_repo_id, root=args.dataset_root),
@@ -366,4 +366,4 @@ if __name__ == "__main__":
         device=args.llp_device,
     )
 
-    eval_real_time_main_v2(hlp=hlp, llp_cfg=llp_cfg, tasks=tasks, task_group_cfg=task_group_cfg)
+    eval_real_time_main_v2(hlp=hlp, llp_cfg=llp_cfg, specs=specs, task_group=args.task_group)
