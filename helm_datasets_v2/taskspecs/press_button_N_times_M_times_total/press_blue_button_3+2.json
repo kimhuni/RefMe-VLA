@@ -57,8 +57,5 @@
         "Episodic_Context": "Previous_Total: 5"
       }
     ]
-  ],
-  "require_event": true,
-  "event_schema": {"event_frames_key": "event_frames"},
-  "sampling": {"detect": {"camera": "table", "negatives_per_positive": 3, "min_gap": 1}}
+  ]
 }

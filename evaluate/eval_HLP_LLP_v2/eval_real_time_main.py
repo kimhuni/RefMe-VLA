@@ -1,353 +1,369 @@
-# evaluate/eval_real_time_main.py
-import time
+# eval_real_time_main.py
+from __future__ import annotations
+import json
 import logging
+import time
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-import argparse
-
-from pynput import keyboard
-import torch
+from termcolor import colored
 from PIL import Image
 
-from configs.default import DatasetConfig
-
-from evaluate.eval_HLP_LLP.eval_real_time_qwen import HLPQwen as HLPPolicy, HLP_HEADER
-from evaluate.eval_HLP_LLP.eval_real_time_pi0 import (
-    LLPConfig, init_llp_runtime as init_llp, llp_step, llp_send_zero,
-    capture_shared_observation, create_llp_batch_from_obs,
+from eval_real_time_qwen import HLPQwenV2, DETECT_HEADER, UPDATE_HEADER
+from eval_real_time_pi0 import (
+    LLPConfig,
+    LLPRuntimeContext,
+    init_llp_runtime,
+    llp_step,
+    llp_send_zero,
+    capture_shared_observation,
+    create_llp_batch_from_obs,
 )
-# read_end_pose_msg는 LLP 코드에서 그대로 사용 (capture_shared_observation 내부)
+
+from utils_keyboard import init_keyboard_listener
+from utils_batches import (
+    build_detect_user_text,
+    build_update_user_text,
+    create_hlp_detect_batch,
+    create_hlp_update_batch,
+)
 
 """
-python evaluate/eval_real_time_main.py \
-  --task_group press_N_times \
-  --use_devices True \
-  --max_steps 1000 \
+python eval_real_time_main.py \
+  --taskspecs_dir /path/to/helm_datasets_v2/taskspecs \
+  --keymap_json /path/to/keymap_press.json \
+  --hlp_base /path/to/Qwen2.5-VL \
+  --hlp_adapter /path/to/qlora_adapter \
   --llp_model_path /ckpt/pi0 \
-  --dataset_repo_id my_repo \
-  --dataset_root /data/my_dataset \
-  --llp_device cuda:0 \
-  --infer_chunk 45 \
-  --hlp_base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --hlp_adapter /result/ghkim/HLP_HeLM/checkpoint-2000 \
-  --hlp_device cuda:0 \
-  --hlp_load_in_4bit True \
-  --hlp_max_new_tokens 128
+  --dataset_repo_id <...> \
+  --dataset_root <...> \
+  --use_devices
 """
-
-# =========================
-# Task Group Config (main에서 관리)
-# =========================
-TASK_GROUPS = {
-    "press_N_times": {
-        "name": "Press button N times",
-        "keymap": {
-            "1": "press the blue button one time",
-            "2": "press the blue button two times",
-            "3": "press the blue button three times",
-            "4": "press the blue button four times",
-        },
-        "prev_history": {
-            "1": "Progress: 0/1 Pressed | World_State: None",
-            "2": "Progress: 0/2 Pressed | World_State: None",
-            "3": "Progress: 0/3 Pressed | World_State: None",
-            "4": "Progress: 0/4 Pressed | World_State: None",
-        },
-        "default_key": "1",
-    },
-    "press_in_order": {
-        "name": "Press buttons in order",
-        "keymap": {
-            "1": "press the buttons in red, green, blue order",
-            "2": "press the buttons in blue, green, red order",
-        },
-        "default_key": "1",
-    },
-    "press_total": {
-        "name": "Press M times total",
-        "keymap": {
-            "1": "press the blue button one time",
-            "4": "press the blue button two times in total",
-        },
-        "default_key": "1",
-    },
-}
-
 
 @dataclass
-class KeyState:
-    quit: bool = False
-    set_zero: bool = False
-    reset_all: bool = False
-    selected_task: Optional[str] = None
-    prev_history: Optional[str] = None
+class TaskRuntimeSpec:
+    task_id: str
+    global_instruction: str
+    init_memory: Dict[str, Any]              # must include Action_Command
+    allowed_actions: List[str]               # Allowed_Action_Commands
 
 
-def init_keyboard_listener(task_group_cfg: Dict[str, Any]) -> KeyState:
-    st = KeyState()
-    keymap = task_group_cfg["keymap"]
-    prev_history = task_group_cfg["prev_history"]
-
-    def on_press(key):
+def _load_taskspecs_recursive(taskspecs_dir: str) -> Dict[str, Dict[str, Any]]:
+    root = Path(taskspecs_dir)
+    out: Dict[str, Dict[str, Any]] = {}
+    for p in sorted(root.rglob("*.json")):
         try:
-            if key == keyboard.Key.esc:
-                st.set_zero = True
-                print("[key] esc -> set robot zero")
-                return
-            if key == keyboard.KeyCode.from_char("0"):
-                st.reset_all = True
-                print("[key] 0 -> reset HLP/LLP")
-                return
-            if key == keyboard.KeyCode.from_char("q"):
-                st.quit = True
-                print("[key] q -> quit")
-                return
-
-            if hasattr(key, "char") and key.char in keymap:
-                st.selected_task = keymap[key.char]
-                st.prev_history = prev_history[key.char]
-                print(f"[key] {key.char} -> task = {st.selected_task} | prev_history = {st.prev_history}")
-
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            tid = str(raw.get("task_id", "")).strip()
+            if not tid:
+                continue
+            out[tid] = raw
         except Exception as e:
-            print("[key] error:", e)
-
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-    st._listener = listener  # type: ignore
-    return st
+            logging.warning(f"[TASKSPEC] failed to read {p}: {e}")
+    return out
 
 
-def stop_keyboard_listener(st: KeyState):
-    if hasattr(st, "_listener"):
-        st._listener.stop()  # type: ignore
+def _taskspec_to_runtime(ts: Dict[str, Any]) -> TaskRuntimeSpec:
+    tid = ts["task_id"]
+    # global_instruction: task_text[0] 우선
+    tt = ts.get("task_text", "")
+    if isinstance(tt, list) and tt:
+        gi = str(tt[0]).strip()
+    else:
+        gi = str(tt).strip()
 
+    init_mem = ts.get("init_memory", None)
+    if not isinstance(init_mem, dict):
+        # 최소 안전 기본값(하지만 너는 (i)로 init_memory에 Action_Command 포함한다고 했으니 보통 여길 안 탐)
+        init_mem = {
+            "Working_Memory": "",
+            "Episodic_Context": "",
+            "Action_Command": "",
+        }
 
-def make_hlp_batch(processor, table_img, wrist_img, task: str, prev_memory: Optional[str]):
-    """
-    main에서 HLP 입력(batch)을 만든다.
-    - 이미지 placeholder 2개 + 텍스트 프롬프트
-    - Frame/Images 라인 없이 깔끔한 정책 프롬프트
-    """
-    prev_memory_str = prev_memory
+    allowed = ts.get("llp_command_list", None)
+    if allowed is None:
+        allowed = ts.get("allowed_actions", None)
+    if not isinstance(allowed, list):
+        allowed = []
 
-    logging.info(prev_memory_str)
-
-    user_text = (
-        HLP_HEADER + "\n\n"
-        f"Task: {task}\n"
-        f"Previous_Memory: {prev_memory_str}\n"
+    return TaskRuntimeSpec(
+        task_id=tid,
+        global_instruction=gi,
+        init_memory=init_mem,
+        allowed_actions=[str(x) for x in allowed],
     )
 
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "image"},
-            {"type": "image"},
-            {"type": "text", "text": user_text},
-        ],
-    }]
 
-    prompt = processor.tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-
-    batch = processor(
-        text=[prompt],
-        images=[table_img, wrist_img],
-        padding=True,
-        return_tensors="pt",
-        do_rescale=False,
-    )
-    return batch
+def _make_dummy_table_image(size: Tuple[int, int] = (224, 224)) -> Image.Image:
+    return Image.new("RGB", size, color=(0, 0, 0))
 
 
-def main(
-    task_group_name: str,
+def eval_real_time_main_v2(
+    hlp: HLPQwenV2,
     llp_cfg: LLPConfig,
-    hlp_base_model: str,
-    hlp_adapter: str,
-    device: str = "cuda:0",
+    tasks: Dict[str, TaskRuntimeSpec],
+    task_group_cfg: Dict[str, Any],
 ):
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
+    init_llp = True
+    llp_ctx: LLPRuntimeContext = init_llp_runtime(llp_cfg)
 
-    tg = TASK_GROUPS[task_group_name]
-    current_task = tg["keymap"][tg["default_key"]]
-    current_history = tg["prev_history"][tg["default_key"]]
-    logging.info(f"[INIT] task_group={tg['name']} default_task='{current_task}' default_history='{current_history}'")
+    # keyboard
+    listener, kstate = init_keyboard_listener(task_group_cfg)
 
-    # --- init runtimes ---
-    hlp = HLPPolicy(
-        base_model_path=hlp_base_model,
-        adapter_path=hlp_adapter,
-        device=device,
-        attn_impl="sdpa",
-        load_in_4bit=True,
-        max_new_tokens=128,
-    )
-    llp_ctx = init_llp(llp_cfg)
+    # runtime state
+    global_instruction: Optional[str] = None
+    current_task_id: Optional[str] = None
+    current_memory: Optional[Dict[str, Any]] = None
 
-    # --- keyboard ---
-    ks = init_keyboard_listener(tg)
+    dummy_table = _make_dummy_table_image()
 
-    # --- loop state ---
-    step_i = 0
-    prev_memory: Optional[str] = None
+    step = 0
+    t0 = time.time()
 
-    logging.info("[MAIN] start realtime eval loop")
+    logging.info(colored("[MAIN] v2 realtime started", "green", attrs=["bold"]))
     try:
         while True:
-            loop_t0 = time.time()
-            step_i += 1
-
-            # -------- keyboard events --------
-            if ks.quit:
-                logging.info("[MAIN] quit pressed")
+            # ---- quit ----
+            if kstate.get("quit", False):
+                logging.info("[MAIN] quit")
                 break
 
-            if ks.set_zero:
+            # ---- set zero ----
+            if kstate.get("set_zero", False):
                 llp_send_zero(llp_ctx)
-                ks.set_zero = False
+                kstate["set_zero"] = False
 
-            if ks.reset_all:
-                # HLP/LLP reset: memory reset + (필요하면 policy reset)
-                prev_memory = None
-                hlp.reset()
-                # policy reset은 기존 로직을 존중 (필요하면 아래 한 줄 추가 가능)
-                llp_ctx.policy.reset()
-                logging.info("[MAIN] reset HLP/LLP (memory cleared)")
-                ks.reset_all = False
+            # ---- reset hlp/llp (episode reset) ----
+            if kstate.get("reset_hlp_llp", False):
+                # episode boundary: memory is cleared and global_instruction None
+                global_instruction = None
+                current_task_id = None
+                current_memory = None
+                kstate["reset_hlp_llp"] = False
+                logging.info(colored("[MAIN] reset_hlp_llp: global_instruction=None, memory cleared", "cyan"))
+                time.sleep(0.05)
 
-            if ks.selected_task is not None:
-                current_task = ks.selected_task
-                prev_memory = ks.prev_history
-                hlp.reset()
-                logging.info(f"[MAIN] task changed -> '{current_task}' (memory cleared)")
-                ks.selected_task = None
-                ks.prev_history = None
+            # ---- task selection ----
+            sel = kstate.get("selected_task", None)  # keymap value (we expect task_id)
+            if sel is not None and sel != current_task_id:
+                # task changed by keyboard
+                prev_task_id = current_task_id
+                prev_gi = global_instruction
+                prev_mem = current_memory
 
-            # -------- capture shared observation ONCE --------
-            state, table_img, wrist_img = capture_shared_observation(
+                new_task_id = str(sel)
+                if new_task_id not in tasks:
+                    logging.warning(f"[MAIN] unknown task_id from keymap: {new_task_id}")
+                else:
+                    new_spec = tasks[new_task_id]
+                    new_gi = new_spec.global_instruction
+
+                    if prev_gi is None:
+                        # None -> new task: init_memory 그대로 사용 (UPDATE 호출 X)
+                        global_instruction = new_gi
+                        current_task_id = new_task_id
+                        current_memory = dict(new_spec.init_memory)
+                        logging.info(
+                            colored(
+                                f"[MAIN] task set (None->new): {new_task_id} | GI='{new_gi}' | init_memory used",
+                                "yellow",
+                                attrs=["bold"],
+                            )
+                        )
+                    else:
+                        # prev -> new: memory는 UPDATE로만 변경
+                        global_instruction = new_gi
+                        current_task_id = new_task_id
+
+                        # UPDATE 1회: (prev memory + new GI) -> new memory
+                        user = build_update_user_text(
+                            UPDATE_HEADER,
+                            global_instruction=new_gi,
+                            memory_in=prev_mem if isinstance(prev_mem, dict) else {},
+                            allowed_actions=new_spec.allowed_actions,
+                        )
+                        # update는 dummy image
+                        batch = create_hlp_update_batch(hlp.processor, dummy_table, user)
+                        t_u0 = time.time()
+                        new_mem = hlp.update(batch)
+                        t_u = time.time() - t_u0
+
+                        # overwrite
+                        current_memory = {
+                            "Working_Memory": new_mem.get("Working_Memory", ""),
+                            "Episodic_Context": new_mem.get("Episodic_Context", ""),
+                            "Action_Command": new_mem.get("Action_Command", ""),
+                        }
+
+                        logging.info(
+                            colored(
+                                f"[MAIN] task changed (prev->new): {prev_task_id} -> {new_task_id} | "
+                                f"UPDATE@change t={t_u:.3f}s | Action='{current_memory.get('Action_Command','')}'",
+                                "yellow",
+                                attrs=["bold"],
+                            )
+                        )
+
+                # consume selection
+                kstate["selected_task"] = None
+
+            # ---- if no task yet, idle ----
+            if global_instruction is None or current_memory is None or current_task_id is None:
+                time.sleep(0.05)
+                continue
+
+            # ---- capture shared obs once ----
+            state, table_img_t, wrist_img_t = capture_shared_observation(
                 piper=llp_ctx.piper,
                 table_rs_cam=llp_ctx.table_rs_cam,
                 wrist_rs_cam=llp_ctx.wrist_rs_cam,
                 use_devices=llp_ctx.cfg.use_devices,
                 use_end_pose=True,
             )
-            if state is None:
-                logging.warning("[MAIN] use_devices=False not supported in this realtime loop yet")
+            if table_img_t is None:
+                # use_devices=False는 안 쓴다고 했지만, 안전하게 idle
+                time.sleep(0.05)
                 continue
 
+            # table tensor -> PIL (HLP용)
+            # table_img_t shape: (H,W,3) or (3,H,W) depending on your camera wrapper.
+            # 여기서는 lerobot rs_cam.image_for_inference()가 반환하는 타입에 맞게 변환해야 함.
+            # 기존 코드에서는 processor에 PIL을 주는게 가장 안전하므로, 아래는 흔한 케이스 2개를 지원.
+            import numpy as np
+            import torch
 
+            if isinstance(table_img_t, torch.Tensor):
+                arr = table_img_t.detach().cpu().numpy()
+            else:
+                arr = np.array(table_img_t)
 
-            # -------- HLP --------
-            hlp_batch = make_hlp_batch(
-                processor=hlp.processor,
-                table_img=table_img,
-                wrist_img=wrist_img,
-                task=current_task,
-                prev_memory=prev_memory,
+            if arr.ndim == 3 and arr.shape[0] in (1, 3):  # CHW
+                arr = np.transpose(arr, (1, 2, 0))
+            table_pil = Image.fromarray(arr.astype("uint8")).convert("RGB")
+
+            # ---- HLP DETECT (real table img) ----
+            user_d = build_detect_user_text(
+                DETECT_HEADER,
+                global_instruction=global_instruction,
+                memory_in=current_memory,
             )
+            b_d = create_hlp_detect_batch(hlp.processor, table_pil, user_d)
 
-            # HLP 1 step
-            t_hlp0 = time.time()
-            hlp_out = hlp.forward(hlp_batch)
-            hlp_t = time.time() - t_hlp0
+            t_h0 = time.time()
+            event_detected = hlp.detect(b_d)
+            t_detect = time.time() - t_h0
 
-            progress = hlp_out.get("Progress", "")
-            world_state = hlp_out.get("World_State", "None")
-            command = hlp_out.get("Command", "").strip()
-            # command = hlp_out.get("Command", "")
+            # ---- HLP UPDATE only if event=true ----
+            t_update = 0.0
+            if event_detected:
+                spec = tasks[current_task_id]
+                user_u = build_update_user_text(
+                    UPDATE_HEADER,
+                    global_instruction=global_instruction,
+                    memory_in=current_memory,
+                    allowed_actions=spec.allowed_actions,
+                )
+                b_u = create_hlp_update_batch(hlp.processor, dummy_table, user_u)
+                t_u0 = time.time()
+                upd = hlp.update(b_u)
+                t_update = time.time() - t_u0
 
-            # main이 prev_memory를 관리 (overwrite)
-            prev_memory = f"Progress: {progress}\nWorld_State: {world_state}"
+                current_memory = {
+                    "Working_Memory": upd.get("Working_Memory", ""),
+                    "Episodic_Context": upd.get("Episodic_Context", ""),
+                    "Action_Command": upd.get("Action_Command", ""),
+                }
 
-            # -------- termination --------
-            if command == "done":
-                loop_t = time.time() - loop_t0
-                fps = 1.0 / max(loop_t, 1e-6)
-                # logging.info(
-                #     f"[MAIN] step={step_i} fps={fps:.2f} "
-                #     f"task='{current_task}' cmd='done' progress='{progress}' "
-                #     f"hlp_t={hlp_t:.3f}s"
-                # )
-                logging.info("[MAIN] HLP returned done -> stop")
-                # break
+            # ---- LLP step (always uses Action_Command) ----
+            cmd = str(current_memory.get("Action_Command", "")).strip()
+            if not cmd:
+                # 안전장치: 비어있으면 아무것도 하지 않음
+                time.sleep(0.05)
+                continue
 
-            # -------- LLP (batch is created in main, uses same observation) --------
             llp_batch = create_llp_batch_from_obs(
                 state=state,
-                table_img=table_img,
-                wrist_img=wrist_img,
-                task=command,  # LLP는 HLP의 Command를 그대로 받음
+                table_img=table_img_t,
+                wrist_img=wrist_img_t,
+                task=cmd,
             )
+            t_pred, t_total_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
 
-            t_llp0 = time.time()
-            # LLP 1 step
-            t_pred, t_total = llp_step(llp_ctx, task_text=command, batch=llp_batch)
-            llp_t = time.time() - t_llp0
-
-            # -------- logging --------
-            loop_t = time.time() - loop_t0
-            fps = 1.0 / max(loop_t, 1e-6)
+            # ---- logging ----
+            step += 1
+            fps = step / max(1e-6, (time.time() - t0))
             logging.info(
-                f"[MAIN] step={step_i} fps={fps:.2f} "
-                f"task='{current_task}' cmd='{command}' \n"
-                f"progress='{progress}' world_state='{world_state}' "
-                f"hlp_t={hlp_t:.3f}s llp_t={llp_t:.3f}s "
-                f"(llp_pred={t_pred:.3f}s llp_total={t_total:.3f}s)"
+                colored(
+                    f"[MAIN] step={step} fps={fps:.2f} task_id='{current_task_id}' "
+                    f"event={event_detected} cmd='{cmd}' "
+                    f"hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_total_llp:.3f}s",
+                    "magenta",
+                    attrs=["bold"],
+                )
             )
+
+            time.sleep(0.02)
 
     finally:
-        stop_keyboard_listener(ks)
-        logging.info("[MAIN] loop finished")
+        try:
+            listener.stop()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
+    import argparse
+
+    logging.basicConfig(level=logging.INFO)
 
     p = argparse.ArgumentParser()
-
-    # Core switches
-    p.add_argument("--task_group", type=str, default="press_n_times", choices=list(TASK_GROUPS.keys()))
-    p.add_argument("--max_steps", type=int, default=1000)
-    p.add_argument("--use_devices", type=bool, default=True)
-
-    # LLP (pi0) config
-    p.add_argument("--llp_model_path", type=str, required=True, help="Path to pi0 policy checkpoint/config")
-    p.add_argument("--dataset_repo_id", type=str, required=True)
-    p.add_argument("--dataset_root", type=str, required=True)
-    p.add_argument("--llp_device", type=str, default="cuda:0")
-    p.add_argument("--infer_chunk", type=int, default=45)
-
-    # HLP (Qwen) config
-    p.add_argument("--hlp_base_model", type=str, required=True, help="Base Qwen2.5-VL model path or repo id")
-    p.add_argument("--hlp_adapter", type=str, required=True, help="Trained LoRA/QLoRA adapter path")
+    p.add_argument("--taskspecs_dir", type=str, required=True)
+    p.add_argument("--keymap_json", type=str, required=True, help="e.g. {'1':'task_id_a','2':'task_id_b'}")
+    p.add_argument("--hlp_base", type=str, required=True)
+    p.add_argument("--hlp_adapter", type=str, required=True)
     p.add_argument("--hlp_device", type=str, default="cuda:0")
-    p.add_argument("--hlp_load_in_4bit", type=bool, default=True)
-    p.add_argument("--hlp_max_new_tokens", type=int, default=128)
+    p.add_argument("--hlp_attn", type=str, default="sdpa")
 
+    # LLP
+    p.add_argument("--llp_model_path", type=str, required=True)
+    p.add_argument("--dataset_repo_id", type=str, default=None)
+    p.add_argument("--dataset_root", type=str, default=None)
+    p.add_argument("--use_devices", action="store_true")
+    p.add_argument("--no_use_devices", dest="use_devices", action="store_false")
+    p.set_defaults(use_devices=True)
+    p.add_argument("--llp_device", type=str, default="cuda:0")
+    p.add_argument("--max_steps", type=int, default=1000000)
     args = p.parse_args()
 
-    # Build LLPConfig (minimal required fields)
+    # load taskspecs
+    raw_specs = _load_taskspecs_recursive(args.taskspecs_dir)
+    tasks = {tid: _taskspec_to_runtime(ts) for tid, ts in raw_specs.items()}
+    logging.info(f"[MAIN] loaded taskspecs: {len(tasks)}")
+
+    # keymap json
+    keymap = json.loads(Path(args.keymap_json).read_text(encoding="utf-8"))
+    task_group_cfg = {"keymap": keymap}
+
+    # HLP
+    hlp = HLPQwenV2(
+        base_model_path=args.hlp_base,
+        adapter_path=args.hlp_adapter,
+        device=args.hlp_device,
+        attn_impl=args.hlp_attn,
+        load_in_4bit=True,
+    )
+
+    # LLP cfg (필요한 DatasetConfig는 네 프로젝트 configs에 맞춰 연결해야 함)
+    from configs.default import DatasetConfig
     llp_cfg = LLPConfig(
-        train_dataset=DatasetConfig(
-        repo_id=args.dataset_repo_id,
-        root=args.dataset_root,
-        ),
+        train_dataset=DatasetConfig(repo_id=args.dataset_repo_id, root=args.dataset_root),
         policy_path=args.llp_model_path,
         use_devices=bool(args.use_devices),
         task="",
         max_steps=args.max_steps,
         device=args.llp_device,
-        infer_chunk=args.infer_chunk,
     )
 
-    # Call main loop
-    main(
-        task_group_name=args.task_group,
-        llp_cfg=llp_cfg,
-        hlp_base_model=args.hlp_base_model,
-        hlp_adapter=args.hlp_adapter,
-        device=args.hlp_device,
-    )
+    eval_real_time_main_v2(hlp=hlp, llp_cfg=llp_cfg, tasks=tasks, task_group_cfg=task_group_cfg)

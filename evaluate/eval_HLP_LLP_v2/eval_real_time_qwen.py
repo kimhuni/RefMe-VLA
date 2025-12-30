@@ -1,7 +1,8 @@
-# evaluate/eval_real_time_HLP_qwen.py
+# eval_real_time_qwen.py
+from __future__ import annotations
 import re
 import time
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 import torch
 import yaml
@@ -9,57 +10,92 @@ from transformers import AutoProcessor, BitsAndBytesConfig, Qwen2_5_VLForConditi
 from peft import PeftModel
 
 
-HLP_HEADER = (
-    "Role: High-Level Planner (HLP).\n"
-    "Given the two images and Previous_Memory, update the memory and choose the next atomic command.\n"
-    "- Only advance Progress when the event has occurred in the current frame.\n"
-    "- World_State should be concise and persistent (use None if no state).\n"
-    "- Command should be either the task command or \"done\" if finished.\n"
+# === training(helm_dataset.py)과 동일 헤더 ===
+DETECT_HEADER = (
+    "You are the robot arm Visual Event Detector.\n"
+    "Goal: Verify whether the CURRENT action has been fully completed in the image.\n"
+    "Input: An image + Global_Instruction describing what counts as action completion.\n"
+    "Decision rule:\n"
+    "- Use the Global_Instruction and image as the ONLY completion criterion.\n"
+    "- Event_Detected: true ONLY when the completion condition is clearly and unambiguously visible.\n"
+    "- Otherwise (partial progress / occlusion / uncertainty) -> Event_Detected: false.\n"
+    "Constraints:\n"
+    "- Do not propose next actions.\n"
+    "- Do not update or rewrite memory.\n"
+    "- Do not output any text except YAML.\n"
+    "Return YAML with exactly one key: Event_Detected (boolean).\n"
 )
 
-_YAML_KEYS = ("Progress", "World_State", "Command")
+UPDATE_HEADER = (
+    "You are the robot arm Logic State Manager.\n"
+    "Context: Event_Detected=true or a Task Change has occurred.\n"
+    "Inputs:\n"
+    "- Global_Instruction defining the overall task.\n"
+    "- Previous memory state (Working_Memory, Episodic_Context, Action_Command).\n"
+    "Goal: Update internal memory and decide the next Action_Command based on the Global_Instruction.\n"
+    "Logic Rules:\n"
+    "1) Update Working_Memory to reflect the action that has just been completed.\n"
+    "2) Check task status using Working_Memory and Global_Instruction:\n"
+    "   - If the task continues: keep Episodic_Context unchanged and select the next Action_Command.\n"
+    "   - If the task is finished: promote/summarize the final result into Episodic_Context and set Action_Command: done.\n"
+    "Constraints:\n"
+    "- Action_Command must be selected ONLY from Allowed_Action_Commands.\n"
+    "- Do not add new actions or explanations.\n"
+    "- Output YAML only with keys: Working_Memory, Episodic_Context, Action_Command.\n"
+)
 
 
-def parse_hlp_yaml(text: str) -> Dict[str, str]:
-    # 모델 출력에 잡다한 텍스트가 섞여도 key 라인만 최대한 추출
-    lines = []
-    for ln in text.splitlines():
-        if any(ln.strip().startswith(k + ":") for k in _YAML_KEYS):
-            lines.append(ln)
-
-    raw = "\n".join(lines).strip() if lines else text.strip()
-
-    out = {"Progress": "", "World_State": "None", "Command": ""}
-
+def _safe_yaml_dict(text: str) -> Dict[str, Any]:
+    """
+    모델 출력이 깨져도 key 라인만 최대한 추출하고 yaml.safe_load 시도.
+    """
+    raw = text.strip()
     try:
         d = yaml.safe_load(raw)
         if isinstance(d, dict):
-            for k in _YAML_KEYS:
-                v = d.get(k, None)
-                if v is None:
-                    out[k] = "None" if k == "World_State" else ""
-                else:
-                    out[k] = str(v)
-        else:
-            raise ValueError("YAML not a dict")
+            return d
     except Exception:
-        # fallback: line-based
-        for k in _YAML_KEYS:
-            m = re.search(rf"^{k}\s*:\s*(.*)$", raw, flags=re.M)
-            if m:
-                v = m.group(1).strip()
-                out[k] = "None" if v.lower() in ("null", "none", "") else v
+        pass
 
-    if out["World_State"].lower() == "null":
-        out["World_State"] = "None"
+    # fallback: key: value 라인만 긁기
+    out = {}
+    for ln in raw.splitlines():
+        m = re.match(r"^\s*([A-Za-z_]+)\s*:\s*(.*)\s*$", ln)
+        if m:
+            out[m.group(1)] = m.group(2)
     return out
 
 
-class HLPQwen:
+def parse_detect_yaml(text: str) -> bool:
+    d = _safe_yaml_dict(text)
+    v = d.get("Event_Detected", False)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in ("true", "yes", "1")
+    return False
+
+
+def parse_update_yaml(text: str) -> Dict[str, str]:
+    d = _safe_yaml_dict(text)
+    out = {
+        "Working_Memory": "",
+        "Episodic_Context": "",
+        "Action_Command": "",
+    }
+    for k in out.keys():
+        v = d.get(k, "")
+        if v is None:
+            v = ""
+        out[k] = str(v).strip()
+    return out
+
+
+class HLPQwenV2:
     """
     Qwen2.5-VL + (Q)LoRA adapter inference
-    - main에서 processor로 만든 batch를 받아 forward(batch) 수행
-    - output은 YAML 파싱 -> dict(Progress/World_State/Command)
+    - detect(): Event_Detected(bool)
+    - update(): memory(dict: Working_Memory/Episodic_Context/Action_Command)
     """
 
     def __init__(
@@ -69,10 +105,12 @@ class HLPQwen:
         device: str = "cuda:0",
         attn_impl: str = "sdpa",
         load_in_4bit: bool = True,
-        max_new_tokens: int = 128,
+        max_new_tokens_detect: int = 32,
+        max_new_tokens_update: int = 128,
     ):
         self.device = device
-        self.max_new_tokens = max_new_tokens
+        self.max_new_tokens_detect = max_new_tokens_detect
+        self.max_new_tokens_update = max_new_tokens_update
 
         self.processor = AutoProcessor.from_pretrained(base_model_path, trust_remote_code=True)
         self.tokenizer = self.processor.tokenizer
@@ -98,37 +136,29 @@ class HLPQwen:
             attn_implementation=attn_impl,
             trust_remote_code=True,
         )
-        print("[HLP] loaded Qwen 2.5 VL")
         model = PeftModel.from_pretrained(base, adapter_path)
-        # inference에서는 merge 권장(속도/단순)
         self.model = model.merge_and_unload().eval()
-        print("[HLP] QLoRA merged")
-
         print(f"[HLP] load done: {time.time()-t0:.2f}s")
 
-    def reset(self):
-        # 현재는 HLP 내부 state는 main이 prev_memory로 관리
-        pass
-
     @torch.no_grad()
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, str]:
+    def _generate_text(self, batch: Dict[str, torch.Tensor], max_new_tokens: int) -> str:
         inputs = {k: v.to(self.device) for k, v in batch.items()}
         gen_ids = self.model.generate(
             **inputs,
-            max_new_tokens=self.max_new_tokens,
+            max_new_tokens=max_new_tokens,
             do_sample=False,
         )
-
-        # prompt 잘라내기
         in_len = inputs["input_ids"].shape[1]
         gen_trim = gen_ids[:, in_len:]
-
         out_text = self.tokenizer.batch_decode(
-            gen_trim,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
+            gen_trim, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0].strip()
+        return out_text
 
-        print("raw_text: ", out_text)
+    def detect(self, batch: Dict[str, torch.Tensor]) -> bool:
+        out_text = self._generate_text(batch, self.max_new_tokens_detect)
+        return parse_detect_yaml(out_text)
 
-        return parse_hlp_yaml(out_text)
+    def update(self, batch: Dict[str, torch.Tensor]) -> Dict[str, str]:
+        out_text = self._generate_text(batch, self.max_new_tokens_update)
+        return parse_update_yaml(out_text)
