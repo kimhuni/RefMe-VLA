@@ -7,17 +7,14 @@ import logging
 import time
 
 from termcolor import colored
-from transformers import PretrainedConfig
 
-from configs.default import DatasetConfig, EvalConfig, WandBConfig
-from configs.policies import PreTrainedConfig
-
+from configs.default import DatasetConfig
 
 # from configs.parser import parser
 from common.utils.utils import init_logging
 
-from evaluate.eval_real_time_HLP_qwen import HLPConfig, HighLevelPlanner
-from evaluate.eval_real_time_LLP_pi0 import (
+from evaluate.eval_old.eval_real_time_HLP_qwen import HLPConfig, HighLevelPlanner
+from evaluate.eval_old.eval_real_time_LLP_pi0 import (
     LLPConfig,
     LLPRuntimeContext,
     init_llp_runtime,

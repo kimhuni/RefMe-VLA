@@ -78,15 +78,15 @@ st.code(sample.get("uid", ""), language="text")
 # -----------------------------
 # Images
 # -----------------------------
-# img_col1, img_col2 = st.columns(2)
-#
-# with img_col1:
-#     st.subheader("📷 Table")
-#     st.image(Image.open(sample["images"]["table"]), use_container_width=True)
+img_col1, img_col2 = st.columns(2)
 
-# with img_col2:
-#     st.subheader("🤖 Wrist")
-#     st.image(Image.open(sample["images"]["wrist"]), use_container_width=True)
+with img_col1:
+    st.subheader("📷 Table")
+    st.image(Image.open(sample["images"]["table"]), use_container_width=True)
+
+with img_col2:
+    st.subheader("🤖 Wrist")
+    st.image(Image.open(sample["images"]["wrist"]), use_container_width=True)
 
 # -----------------------------
 # YAML Comparison

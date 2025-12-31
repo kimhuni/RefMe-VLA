@@ -7,8 +7,13 @@ from .spec import TaskSpec
 from .templates import render_user_prompt, render_assistant_yaml
 
 
-def intra_for_frame(t: int, event_frame_idx: int, base_intra: int, max_intra: int) -> int:
-    intra = base_intra if t < event_frame_idx else base_intra + 1
+def intra_for_frame(t: int, event_frame_idxs: List[int], base_intra: int, max_intra: int) -> int:
+    """Return intra state at frame t. Increments by the number of events that have occurred up to t (inclusive)."""
+    if not event_frame_idxs:
+        intra = base_intra
+    else:
+        k = sum(1 for e in event_frame_idxs if t >= e)
+        intra = base_intra + k
     return max(0, min(intra, max_intra))
 
 
@@ -43,6 +48,11 @@ def make_rows_for_variant(
             f"Invalid base_intra={base_intra} for task={task.task_id} inter={inter} max_intra={max_intra}"
         )
 
+    if hasattr(ep, "event_frame_idxs") and ep.event_frame_idxs:
+        event_frame_idxs = sorted(set(ep.event_frame_idxs))
+    else:
+        event_frame_idxs = [ep.event_frame_idx] if ep.event_frame_idx is not None else []
+
     task_text = task.get_task_text(inter)
     ws = task.get_world_state(inter)
     llp_commands = task.llp_commands
@@ -50,14 +60,14 @@ def make_rows_for_variant(
     rows: List[Dict[str, Any]] = []
     for t in range(ep.n_frames):
         # Output state for the current frame
-        out_intra = intra_for_frame(t, ep.event_frame_idx, base_intra, max_intra)
+        out_intra = intra_for_frame(t, event_frame_idxs, base_intra, max_intra)
 
         # Input state (Previous_Memory) is 1-step lagged.
         # For the first frame, we set in_intra = out_intra (no prior frame exists).
         if t == 0:
             in_intra = out_intra
         else:
-            in_intra = intra_for_frame(t - 1, ep.event_frame_idx, base_intra, max_intra)
+            in_intra = intra_for_frame(t - 1, event_frame_idxs, base_intra, max_intra)
 
         # Previous memory comes from the *input* (lagged) state.
         in_progress = task.get_progress(inter, in_intra)
@@ -85,7 +95,8 @@ def make_rows_for_variant(
                 "inter": inter,
                 "base_intra": base_intra,
                 "frame_idx": t,
-                "event_frame_idx": ep.event_frame_idx,
+                "event_frame_idx": event_frame_idxs[0] if event_frame_idxs else None,
+                "event_frame_idxs": event_frame_idxs,
                 "images": images,
                 "conversations": [
                     {"from": "user", "value": user_text},

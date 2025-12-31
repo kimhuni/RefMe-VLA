@@ -6,7 +6,7 @@ from typing import List, Tuple, Optional
 
 import streamlit as st  # type: ignore
 from PIL import Image
-from helm_datasets_v2.utils.io_utils import (
+from helm_datasets_v3.utils.io_utils import (
     list_chunks_from_frames,
     list_episodes_from_frames,
     frames_dir,
@@ -17,8 +17,8 @@ from helm_datasets_v2.utils.io_utils import (
 
 """
 export PYTHONPATH=$(pwd)
-streamlit run helm_datasets/annotate_app.py --\
-    --out_root "/data/ghkim/helm_data/wipe_the_window" \
+streamlit run helm_datasets_v3/annotate_app.py --\
+    --out_root "/data/ghkim/helm_data/press_the_button_nolight" \
     --fps_frames 5
 """
 
