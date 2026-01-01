@@ -215,12 +215,6 @@ class HelmEvalDatasetV3(Dataset):
             padding=False,
         )
 
-        for k, v in model_inputs.items():
-            if torch.is_tensor(v):
-                logger.info(f"[BATCH_D] {k}: shape={tuple(v.shape)} dtype={v.dtype}")
-            else:
-                logger.info(f"[BATCH_D] {k}: type={type(v)}")
-
         # flatten to sample tensors (no batch dim)
         input_ids = model_inputs["input_ids"].squeeze(0)
         attention_mask = model_inputs["attention_mask"].squeeze(0)
@@ -240,12 +234,6 @@ class HelmEvalDatasetV3(Dataset):
 
             if not (grid_thw.ndim == 2 and grid_thw.size(-1) == 3):
                 raise ValueError(f"Bad image_grid_thw final shape: {tuple(grid_thw.shape)}")
-
-        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(input_ids.shape)} dtype={input_ids.dtype}")
-        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(attention_mask.shape)} dtype={attention_mask.dtype}")
-        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(pixel_values.shape)} dtype={pixel_values.dtype}")
-        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(grid_thw.shape)} dtype={grid_thw.dtype}")
-
 
         return {
             "uid": row.get("uid", f"idx{i}"),
