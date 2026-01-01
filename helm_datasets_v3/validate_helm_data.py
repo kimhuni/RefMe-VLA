@@ -8,7 +8,7 @@ import streamlit as st
 from PIL import Image
 """
 export PYTHONPATH=$(pwd)
-streamlit run helm_datasets_v2/validate_helm_data.py
+streamlit run helm_datasets_v3/validate_helm_data.py
 """
 
 # ---------- IO ----------
@@ -165,7 +165,7 @@ def main():
     r = rows[st.session_state.row_idx]
     mode = r.get("mode")
 
-    left, right = st.columns([1.2, 1])
+    left, right = st.columns([0.5, 1])
 
     with left:
         st.subheader("Image (if exists)")
@@ -210,6 +210,9 @@ def main():
 
         st.markdown("**label**")
         st.json(r.get("label", {}))
+
+        st.markdown("**event**")
+        st.code(str(r.get("gt_text", {})))
 
         st.subheader("Row JSON")
         st.json(r)

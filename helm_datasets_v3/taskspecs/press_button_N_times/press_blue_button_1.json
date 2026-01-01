@@ -1,20 +1,28 @@
 {
   "task_id": "press_blue_button_1",
-  "max_inter": 0,
-  "max_intra": [1],
+  "inter": 0,
+  "intra": [1],
   "task_text": [
     "press the blue button one time"
   ],
   "episode_filters" : [
-    {"tasks": "press the blue button"}
+    [
+      {"tasks": "press the blue button"}
+    ]
   ],
-  "command_grid": [
-    ["press the blue button", "done"]
-  ],
-  "progress_grid": [
-    ["0/1 Pressed", "1/1 Pressed"]
-  ],
-  "world_state_grid": [
-    "None"
+"llp_commands": "press the blue button\n done",
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 0 (Goal: 1)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Total: 1"
+      }
+    ]
   ]
 }

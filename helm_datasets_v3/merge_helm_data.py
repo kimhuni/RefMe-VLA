@@ -10,10 +10,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 """
 # 전부 병합
-python helm_datasets_v2/merge_helm_data.py \
-  --jsonl_root /data/ghkim/helm_data/wipe_the_window/jsonl_v2 \
-  --out_dir   /data/ghkim/helm_data/wipe_the_window/jsonl_v2/merged/wipe_the_window \
-  --tasks wipe_the_window \
+python helm_datasets_v3/merge_helm_data.py \
+  --jsonl_root /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3 \
+  --out_dir   /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/wipe_the_window \
   --split_mode keep \
   --shard_size 0
   

@@ -10,19 +10,47 @@ def dump_yaml(d: Dict) -> str:
 
 
 DETECT_SYSTEM = (
-    "Role: HLP-DETECT.\n"
-    "Given image(s) and Memory, decide whether the target event has occurred in the current frame.\n"
-    "Return YAML with keys: Event.\n"
-    "- Event must be true or false.\n"
+    "You are the robot arm Visual Event Detector.\n"
+    "Goal: Decide whether the target EVENT is detected in the current image.\n"
+    "The EVENT corresponds to a meaningful completion moment for the current stage of the Global_Instruction."
+    "Input: An image + Global_Instruction describing what counts as action completion"
+    " + Memory (may help interpret the current stage/goal)\n"
+    "Decision rule:\n"
+    "- Use the Global_Instruction  as the primary criterion.\n"
+    "- You MAY use Memory only to understand what “completion” means for the current stage."
+    "- Event_Detected: true when the completion (or clearly post-completion state) is visible.\n"
+    "- Otherwise (partial progress / occlusion / uncertainty) -> Event_Detected: false.\n"
+    "Constraints:\n"
+    "- Do not propose next actions.\n"
+    "- Do not update or rewrite memory.\n"
+    "- Do not output any text except YAML.\n"
+    "Return YAML with exactly one key: Event_Detected (boolean).\n"
 )
 
 UPDATE_SYSTEM = (
-    "Role: HLP-UPDATE.\n"
-    "Given image(s), Task and Previous_Memory, update the memory AFTER the event.\n"
-    "Return YAML with keys: Action_Command, Working_Memory, Episodic_Context.\n"
-    "Keep values concise.\n"
+    "You are the robot arm Logic State Manager.\n"
+    "Context: Event_Detected=true or a Task Change has occurred.\n"
+    "Inputs:\n"
+    "- Global_Instruction defining the overall task.\n"
+    "- Previous memory state (with keys: Working_Memory, Episodic_Context, Action_Command).\n"
+    "- Allowed_Action_Commands (a small fixed list)"
+    "Goal: Produce the next memory state after the event, preserving information"
+    "and decide the next Action_Command based on the Global_Instruction.\n"
+    "Logic Rules ((copy-first, lossless)):\n"
+    "1) Start by COPYING Previous_Memory fields.\n"
+    "2) Update Working_Memory to reflect the newly completed step."
+    "- Prefer appending or small edits over rewriting."
+    "3) Episodic_Context:"
+    "- If the task is not finished, keep it EXACTLY unchanged."
+    "- If the task is finished, update it to summarize the final outcome."
+    "4) Action_Command:"
+    "- Must be EXACTLY one of Allowed_Action_Commands."
+    "- Use done only when the task is finished."
+    "Constraints:\n"
+    "- Action_Command must be selected ONLY from Allowed_Action_Commands.\n"
+    "- Do not add new actions or explanations.\n"
+    "- Output YAML only with keys: Action_Command, Working_Memory, Episodic_Context.\n"
 )
-
 
 def render_memory_one_line(mem: Dict[str, str]) -> str:
     # prompt 입력은 한 줄로 짧게, 출력은 YAML로 강제
@@ -42,11 +70,22 @@ def make_detect_prompt(task_text: str, memory: Dict[str, str], n_images: int) ->
     )
 
 
-def make_update_prompt(task_text: str, prev_memory: Dict[str, str], n_images: int) -> str:
+
+def make_update_prompt(
+    task_text: str,
+    prev_memory: Dict[str, str],
+    n_images: int,
+    llp_commands: str
+) -> str:
     img_tokens = "<image_table>" + (" <image_wrist>" if n_images == 2 else "")
+    allowed_block = ""
+    if llp_commands.strip():
+        allowed_block = f"\nAllowed_Action_Commands:\n{llp_commands.strip()}\n"
+
     return (
         f"{UPDATE_SYSTEM}\n"
         f"Task: {task_text}\n"
         f"Previous_Memory: {render_memory_one_line(prev_memory)}\n"
+        f"{allowed_block}"
         f"Images: {img_tokens}\n"
     )

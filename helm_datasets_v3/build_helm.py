@@ -16,9 +16,9 @@ from helm_datasets_v3.core.templates import dump_yaml, make_detect_prompt, make_
 
 """
 python -m helm_datasets_v3.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_button_N_times_ep60" \
-  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs" \
-  --tasks press_blue_button_3+2 \
+  --out_root "/data/ghkim/helm_data/press_the_button_nolight" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/press_button_N_times" \
+  --tasks "press_blue_button_1" "press_blue_button_2" "press_blue_button_3" \
   --fps_out 5 \
   --n_images 1 \
   --val_ratio 0.1 \
@@ -68,57 +68,65 @@ def make_uid(task_id: str, chunk: str, episode: str, split: str, kind: str, inte
     return f"{task_id}@{chunk}-{episode}-{split}-{kind}-i{inter_idx}-s{step_idx}-f{frame_id:06d}"
 
 
-def build_detect_rows_for_episode(
+def build_detect_rows_for_episode_step(
     spec: TaskSpecV3,
     ep: DataEpisodeV3,
     out_root: Path,
     fps_out: int,
     n_images: int,
     split: str,
-    seed: int,
+    inter_idx: int,
+    step_idx: int,
 ) -> List[Dict[str, Any]]:
     """
-    Detect: memory_grid × frame -> Event flag.
-    - inter별로 task_text[inter] 사용
-    - memory_grid[inter]의 각 state를 모두 사용(원하면 나중에 옵션으로 줄일 수 있음)
+    DETECT(v3): (inter, step)별로 episode_filters에 매칭된 episode만 사용.
+    - memory는 memory_grid[inter][step]만 사용 (현재 단계에서 event 판정)
+    - frame은 ep.frame_ids 전체를 사용 (이미 정제된 프레임 셋)
+    - label: detect_pos / detect_neg
     """
     rows: List[Dict[str, Any]] = []
     event_set = set(ep.event_frame_ids)
 
-    for inter_idx in range(spec.inter + 1):
-        task_text = spec.task_text[inter_idx]
-        for mem_state_idx, mem in enumerate(spec.memory_grid[inter_idx]):
-            prompt = make_detect_prompt(task_text, mem, n_images=n_images)
-            # 모든 frame 사용 (정제된 프레임이므로 OK)
-            for frame_id in ep.frame_ids:
-                is_event = frame_id in event_set
-                gt = dump_yaml({"Event": bool(is_event)})
+    task_text = spec.task_text[inter_idx]
+    mem = spec.memory_grid[inter_idx][step_idx]  # 핵심: step별 memory만 사용
 
-                images = {
-                    "table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))
-                }
-                if n_images == 2:
-                    images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+    prompt = make_detect_prompt(task_text, mem, n_images=n_images)
 
-                rows.append({
-                    "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "detect", inter_idx, mem_state_idx, frame_id),
-                    "task_id": spec.task_id,
-                    "mode": "DETECT",
-                    "chunk": ep.chunk,
-                    "episode": ep.episode,
-                    "inter": inter_idx,
-                    "memory_state": mem_state_idx,
-                    "frame_id": frame_id,
-                    "event_frame_ids": ep.event_frame_ids,
-                    "images": images,
-                    "user_prompt": prompt,
-                    "gt_text": gt,
-                    "gt_yaml": {"Event": bool(is_event)},
-                    "meta": {
-                        "data_episode_tasks": ep.meta.get("tasks"),
-                        "episode_index": ep.meta.get("episode_index"),
-                    }
-                })
+    for frame_id in ep.frame_ids:
+        is_event = frame_id in event_set
+
+        # ✅ 키 통일: Event_Detected
+        gt_yaml = {"Event_Detected": bool(is_event)}
+        gt_text = dump_yaml(gt_yaml)
+
+        images = {
+            "table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))
+        }
+        if n_images == 2:
+            images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+
+        rows.append({
+            "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "detect", inter_idx, step_idx, frame_id),
+            "task_id": spec.task_id,
+            "mode": "DETECT",
+            "label": "detect_pos" if is_event else "detect_neg",   # ✅ 명시 필드
+            "event_detected": bool(is_event),                      # ✅ 명시 필드(샘플링 편의)
+            "chunk": ep.chunk,
+            "episode": ep.episode,
+            "inter": inter_idx,
+            "step": step_idx,
+            "frame_id": frame_id,
+            "event_frame_ids": ep.event_frame_ids,
+            "images": images,
+            "user_prompt": prompt,
+            "gt_text": gt_text,
+            "gt_yaml": gt_yaml,
+            "meta": {
+                "data_episode_tasks": ep.meta.get("tasks"),
+                "episode_index": ep.meta.get("episode_index"),
+            }
+        })
+
     return rows
 
 
@@ -156,7 +164,7 @@ def build_update_rows_for_episode_step(
         prev_mem, curr_mem = spec.transition_prev_curr()
         frame_id = select_transition_frame_id(ep)
         if frame_id is not None:
-            prompt = make_update_prompt(task_text, prev_mem, n_images=n_images)
+            prompt = make_update_prompt(task_text, prev_mem, n_images=n_images, llp_commands=spec.llp_commands)
             gt = dump_yaml(curr_mem)
 
             images = {"table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
@@ -165,6 +173,7 @@ def build_update_rows_for_episode_step(
 
             rows.append({
                 "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "transition", inter_idx, step_idx, frame_id),
+                "label": "update_transition",
                 "task_id": spec.task_id,
                 "mode": "UPDATE",
                 "kind": "transition",
@@ -185,7 +194,7 @@ def build_update_rows_for_episode_step(
 
     # (2) intra update replicated over ALL event frames
     prev_mem, curr_mem = spec.prev_curr_for_step(inter_idx, step_idx)
-    prompt = make_update_prompt(task_text, prev_mem, n_images=n_images)
+    prompt = prompt = make_update_prompt(task_text, prev_mem, n_images=n_images, llp_commands=spec.llp_commands)
     gt = dump_yaml(curr_mem)
 
     # event_frame_ids가 비어있으면 update를 만들 수 없음 (event 복제 정책이므로)
@@ -196,6 +205,7 @@ def build_update_rows_for_episode_step(
 
         rows.append({
             "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "update", inter_idx, step_idx, frame_id),
+            "label": "update_intra",
             "task_id": spec.task_id,
             "mode": "UPDATE",
             "kind": "intra",
@@ -249,17 +259,34 @@ def build_for_task(
     update_out = task_out / "update"
 
     # ===== DETECT =====
+    # ===== DETECT =====
     detect_train_rows: List[Dict[str, Any]] = []
     detect_val_rows: List[Dict[str, Any]] = []
 
-    for split_name, eps in [("train", train_eps), ("val", val_eps)]:
-        for ep in eps:
-            # detect는 episode_filters 적용할 수도 있지만, 우선 전체에서 생성(정제된 에피소드만 있다면 OK)
-            rows = build_detect_rows_for_episode(spec, ep, out_root, fps_out, n_images, split_name, seed)
-            if split_name == "train":
-                detect_train_rows.extend(rows)
-            else:
-                detect_val_rows.extend(rows)
+    def build_detect_for_split(eps: List[DataEpisodeV3], split_name: str) -> List[Dict[str, Any]]:
+        out_rows: List[Dict[str, Any]] = []
+        for inter_idx in range(spec.inter + 1):
+            # detect는 "현재 단계(step)"에서 이벤트를 판정하는 문제로 만들기 위해
+            # step 0..intra[inter]-1 에 대해서만 생성 (done state는 제외)
+            for step_idx in range(spec.intra[inter_idx]):
+                flt = spec.episode_filters[inter_idx][step_idx]
+                for ep in eps:
+                    if not episode_matches_filter(ep.meta, flt):
+                        continue
+                    out_rows.extend(build_detect_rows_for_episode_step(
+                        spec=spec,
+                        ep=ep,
+                        out_root=out_root,
+                        fps_out=fps_out,
+                        n_images=n_images,
+                        split=split_name,
+                        inter_idx=inter_idx,
+                        step_idx=step_idx,
+                    ))
+        return out_rows
+
+    detect_train_rows = build_detect_for_split(train_eps, "train")
+    detect_val_rows = build_detect_for_split(val_eps, "val")
 
     shard_write_jsonl(detect_train_rows, detect_out, "train", shard_size)
     shard_write_jsonl(detect_val_rows, detect_out, "val", shard_size)

@@ -15,6 +15,7 @@ def load_taskspec(path: Path) -> TaskSpecV3:
         task_text=list(raw["task_text"]),
         episode_filters=raw["episode_filters"],
         memory_grid=raw["memory_grid"],
+        llp_commands=str(raw.get("llp_commands", "")),
     )
     spec.validate()
     return spec
