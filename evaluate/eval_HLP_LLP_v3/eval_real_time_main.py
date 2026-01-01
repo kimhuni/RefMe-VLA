@@ -53,12 +53,12 @@ class TaskSpecRuntime:
     allowed_actions: str            # list of allowed action commands
 
 
-def _make_dummy_images(num_images: int, size: Tuple[int, int] = (224, 224)) -> List[Image.Image]:
+def _make_dummy_image(num_images: int, size: Tuple[int, int] = (224, 224)) -> List[Image.Image]:
     """
     캡처 이미지가 아직 없을 때만 fallback으로 쓰는 black 이미지들.
     (가능하면 실시간에서는 캡처 이미지 사용을 권장)
     """
-    return [Image.new("RGB", size, color=(0, 0, 0)) for _ in range(num_images)]
+    return Image.new("RGB", size, color=(0, 0, 0))
 
 
 def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str, TaskSpecRuntime]:
@@ -171,7 +171,6 @@ def eval_real_time_main_v3(
     llp_cfg: LLPConfig,
     specs: Dict[str, TaskSpecRuntime],
     task_group: str = "1",
-    num_images: int = 1,
 ):
     llp_ctx: LLPRuntimeContext = init_llp_runtime(llp_cfg)
     listener, kstate = init_keyboard_listener(task_group)
@@ -182,7 +181,7 @@ def eval_real_time_main_v3(
     global_instruction: Optional[str] = None
     current_memory: Optional[Dict[str, Any]] = None
 
-    last_images_pil: Optional[List[Image.Image]] = None
+    last_obs_pil: Optional[Image.Image] = None
 
     step = 0
     t_start = time.time()
@@ -238,8 +237,8 @@ def eval_real_time_main_v3(
                             memory_in=prev_mem,
                             allowed=new_spec.allowed_actions,
                         )
-                        imgs_for_update = last_images_pil if last_images_pil is not None1 else _make_dummy_images(num_images)
-                        batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u, num_images=num_images)
+                        obs_pil_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
+                        batch_u = create_hlp_update_batch(hlp.processor, obs_pil_for_update, user_u)
                         t0 = time.time()
                         upd = hlp.update(batch_u)
                         dt = time.time() - t0
@@ -303,39 +302,27 @@ def eval_real_time_main_v3(
                 time.sleep(3)
                 continue
 
-            # capture once
-            state, table_img_t, wrist_img_t = capture_shared_observation(
+            state, obs_img_t, _wrist_img_t = capture_shared_observation(
                 piper=llp_ctx.piper,
                 table_rs_cam=llp_ctx.table_rs_cam,
                 wrist_rs_cam=llp_ctx.wrist_rs_cam,
                 use_devices=llp_ctx.cfg.use_devices,
                 use_end_pose=True,
             )
-            if table_img_t is None:
+
+            if obs_img_t is None:
                 time.sleep(0.3)
                 continue
 
-            # detect uses real table image (1 image)
-            table_pil = _to_pil_from_tensor(table_img_t)
-            images_pil: List[Image.Image] = [table_pil]
+            # 1장 고정: table 관측만 사용
+            obs_pil = _to_pil_from_tensor(obs_img_t)
 
-            # 2장 모드면 wrist도 포함
-            if llp_ctx.cfg is not None:
-                pass  # placeholder (no-op)
-            if num_images == 2:
-                if wrist_img_t is None:
-                    # wrist가 없으면 table로 대체(placeholder mismatch 방지)
-                    images_pil.append(table_pil)
-                else:
-                    wrist_pil = _to_pil_from_tensor(wrist_img_t)
-                    images_pil.append(wrist_pil)
-
-            # [image caching for UPDATE] task change / next_inter update에서 쓸 수 있게 캐시
-            last_images_pil = images_pil
+            # UPDATE에서 재사용할 수 있게 캐시
+            last_obs_pil = obs_pil
 
 
             plt.figure()
-            plt.imshow(images_pil[0])
+            plt.imshow(obs_pil)
             plt.title(f"table step={step}")
             plt.axis("off")
             plt.show()
@@ -347,7 +334,7 @@ def eval_real_time_main_v3(
                 memory_in=current_memory,
             )
 
-            batch_d = create_hlp_detect_batch(hlp.processor, images_pil, user_d, num_images=num_images)
+            batch_d = create_hlp_detect_batch(hlp.processor, obs_pil, user_d)
 
             t_detect0 = time.time()
             # [DETECT] run DETECT
@@ -370,7 +357,7 @@ def eval_real_time_main_v3(
                     memory_in=current_memory,
                     allowed=spec.allowed_actions,
                 )
-                batch_u = create_hlp_update_batch(hlp.processor, images_pil, user_u, num_images=num_images)
+                batch_u = create_hlp_update_batch(hlp.processor, obs_pil, user_d)
                 t_up0 = time.time()
                 upd = hlp.update(batch_u)
                 t_update = time.time() - t_up0
@@ -386,8 +373,8 @@ def eval_real_time_main_v3(
             if cmd:
                 llp_batch = create_llp_batch_from_obs(
                     state=state,
-                    table_img=table_img_t,
-                    wrist_img=wrist_img_t,
+                    table_img=obs_img_t,
+                    wrist_img=_wrist_img_t,
                     task=cmd,
                 )
                 t_pred, t_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
@@ -427,8 +414,6 @@ if __name__ == "__main__":
     p.add_argument("--hlp_device", type=str, default="cuda:0")
     p.add_argument("--hlp_attn", type=str, default="sdpa")
 
-    p.add_argument("--num_images", type=int, default=1, choices=[1, 2])
-
     # LLP args는 네 프로젝트 config에 맞게 유지
     p.add_argument("--llp_model_path", type=str, required=True)
     p.add_argument("--dataset_repo_id", type=str, default=None)
@@ -467,5 +452,4 @@ if __name__ == "__main__":
         llp_cfg=llp_cfg,
         specs=specs,
         task_group=args.task_group,
-        num_images=args.num_images,
     )

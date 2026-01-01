@@ -145,7 +145,8 @@ class HLPQwenV2:
             trust_remote_code=True,
         )
         model = PeftModel.from_pretrained(base, adapter_path)
-        self.model = model.merge_and_unload().eval()
+        # self.model = model.merge_and_unload().eval()
+        self.model = model.eval()
         print(f"[HLP] load done: {time.time()-t0:.2f}s")
 
     @torch.no_grad()

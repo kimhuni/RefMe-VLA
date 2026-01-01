@@ -78,22 +78,21 @@ st.code(sample.get("uid", ""), language="text")
 # -----------------------------
 # Images
 # -----------------------------
-img_col1, img_col2 = st.columns(2)
-
-with img_col1:
-    st.subheader("📷 Table")
-    st.image(Image.open(sample["images"]["table"]), use_container_width=True)
-
-with img_col2:
-    st.subheader("🤖 Wrist")
-    st.image(Image.open(sample["images"]["wrist"]), use_container_width=True)
+images = sample.get("images", {})
 
 # -----------------------------
 # YAML Comparison
 # -----------------------------
 st.markdown("## 🔍 YAML Comparison")
 
-col_gt, col_pred = st.columns(2)
+img_col1, col_gt, col_pred = st.columns(3)
+
+with img_col1:
+    st.subheader("📷 Table")
+    if "table" in images:
+        st.image(Image.open(images["table"]), use_container_width=True)
+    else:
+        st.warning("Table image not available")
 
 with col_gt:
     st.subheader("✅ Ground Truth")

@@ -41,7 +41,7 @@ CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v2/eval_helm_hlp_v3.py \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /result/ghkim/HLP_HeLM_v3_press_N_3320_0101/checkpoint-3200 \
   --max_samples 200 --seed 123 \
-  --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v3_press_N_3320_0101/eval_preds_3200.jsonl
+  --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v3_press_N_3320_0101/eval_preds_vanilla.jsonl
 """
 
 # -------------------------
@@ -215,6 +215,12 @@ class HelmEvalDatasetV3(Dataset):
             padding=False,
         )
 
+        for k, v in model_inputs.items():
+            if torch.is_tensor(v):
+                logger.info(f"[BATCH_D] {k}: shape={tuple(v.shape)} dtype={v.dtype}")
+            else:
+                logger.info(f"[BATCH_D] {k}: type={type(v)}")
+
         # flatten to sample tensors (no batch dim)
         input_ids = model_inputs["input_ids"].squeeze(0)
         attention_mask = model_inputs["attention_mask"].squeeze(0)
@@ -234,6 +240,12 @@ class HelmEvalDatasetV3(Dataset):
 
             if not (grid_thw.ndim == 2 and grid_thw.size(-1) == 3):
                 raise ValueError(f"Bad image_grid_thw final shape: {tuple(grid_thw.shape)}")
+
+        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(input_ids.shape)} dtype={input_ids.dtype}")
+        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(attention_mask.shape)} dtype={attention_mask.dtype}")
+        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(pixel_values.shape)} dtype={pixel_values.dtype}")
+        logger.info(f"[after squeeze BATCH_D] input ids: shape={tuple(grid_thw.shape)} dtype={grid_thw.dtype}")
+
 
         return {
             "uid": row.get("uid", f"idx{i}"),
@@ -347,8 +359,8 @@ def load_model_and_processor(
         trust_remote_code=True,
     )
 
-    if adapter_path:
-        model = PeftModel.from_pretrained(model, adapter_path)
+    # if adapter_path:
+    #     model = PeftModel.from_pretrained(model, adapter_path)
 
     model.eval()
     return model, processor

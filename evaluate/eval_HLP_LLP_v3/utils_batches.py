@@ -46,29 +46,23 @@ def build_update_user_text(
     return user
 
 
-def _make_user_messages_with_images(user_text: str, num_images: int):
+def _make_user_messages_with_images(user_text: str):
     """
     Qwen2.5-VL chat template: placeholder image 개수 == 실제 images 개수 여야 함.
     """
-    if num_images not in (1, 2):
-        raise ValueError(f"num_images must be 1 or 2, got {num_images}")
-
-    content = [{"type": "image"} for _ in range(num_images)]
+    content = [{"type": "image"}]
     content.append({"type": "text", "text": user_text})
     return [{"role": "user", "content": content}]
 
 
-def create_hlp_detect_batch(processor, images_pil, user_text: str, num_images: int = 1):
+def create_hlp_detect_batch(processor, obs_pil, user_text: str):
     """
     DETECT batch 생성.
     images_pil: List[PIL] (len==num_images)
     """
-    if not isinstance(images_pil, (list, tuple)):
-        images_pil = [images_pil]
-    if len(images_pil) != num_images:
-        raise ValueError(f"[DETECT] len(images_pil)={len(images_pil)} != num_images={num_images}")
 
-    messages = _make_user_messages_with_images(user_text=user_text, num_images=num_images)
+
+    messages = _make_user_messages_with_images(user_text=user_text)
 
     print("----------Detect input text--------------\n", messages)
 
@@ -78,24 +72,20 @@ def create_hlp_detect_batch(processor, images_pil, user_text: str, num_images: i
         add_generation_prompt=True,
     )
     return processor(
-        text=[prompt],
-        images=[list(images_pil)],
-        padding=True,
-        return_tensors="pt",
+        text=user_text,
+        images = obs_pil,  # IMPORTANT: single PIL, no nested list
+        padding = True,
+        return_tensors = "pt",
     )
 
 
-def create_hlp_update_batch(processor, images_pil, user_text: str, num_images: int = 1):
+def create_hlp_update_batch(processor, obs_pil, user_text: str, num_images: int = 1):
     """
     UPDATE batch 생성.
     v3 정합: dummy 이미지 금지 -> 실시간 캡처 이미지(1장 또는 2장)를 그대로 넣는다.
     """
-    if not isinstance(images_pil, (list, tuple)):
-        images_pil = [images_pil]
-    if len(images_pil) != num_images:
-        raise ValueError(f"[UPDATE] len(images_pil)={len(images_pil)} != num_images={num_images}")
 
-    messages = _make_user_messages_with_images(user_text=user_text, num_images=num_images)
+    messages = _make_user_messages_with_images(user_text=user_text)
 
     print("----------Detect input text--------------\n", messages)
 
@@ -105,8 +95,8 @@ def create_hlp_update_batch(processor, images_pil, user_text: str, num_images: i
         add_generation_prompt=True,
     )
     return processor(
-        text=[prompt],
-        images=[list(images_pil)],
-        padding=True,
-        return_tensors="pt",
-    )
+            text=user_text,
+            images = obs_pil,  # IMPORTANT: single PIL, no nested list
+            padding = True,
+            return_tensors = "pt",
+        )
