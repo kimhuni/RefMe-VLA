@@ -5,7 +5,7 @@ from pynput import keyboard
 
 # ====== 네가 원하는 방식: task group별 키맵 ======
 TASK_KEYMAP: Dict[str, Dict[str, str]] = {
-    "press_the_button_N_times": {
+    "press_button_N_times": {
         "1": "press_blue_button_1",
         "2": "press_blue_button_2",
         "3": "press_blue_button_3",

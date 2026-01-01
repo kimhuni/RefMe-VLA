@@ -11,12 +11,16 @@ def _yaml_dump(d: Dict[str, Any]) -> str:
 
 
 def build_detect_user_text(detect_header: str, global_instruction: str, memory_in: Dict[str, Any]) -> str:
+    ac = memory_in.get("Action_Command", "None")
+    wm = memory_in.get("Working_Memory", "None")
+    ec = memory_in.get("Episodic_Context", "None")
+    mem =  f"Action_Command: {ac} | Working_Memory: {wm} | Episodic_Context: {ec}"
     return (
         detect_header
-        + "\nGlobal_Instruction:\n"
-        + str(global_instruction).strip()
-        + "\n\nCurrent_Memory:\n"
-        + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
+        + f"Task: {str(global_instruction).strip()}\n"
+        + f"Memory: {mem}\n"
+        + f"Images: <image_table>\n"
+        # + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
     )
 
 
@@ -65,6 +69,9 @@ def create_hlp_detect_batch(processor, images_pil, user_text: str, num_images: i
         raise ValueError(f"[DETECT] len(images_pil)={len(images_pil)} != num_images={num_images}")
 
     messages = _make_user_messages_with_images(user_text=user_text, num_images=num_images)
+
+    print("----------Detect input text--------------\n", messages)
+
     prompt = processor.tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -89,6 +96,9 @@ def create_hlp_update_batch(processor, images_pil, user_text: str, num_images: i
         raise ValueError(f"[UPDATE] len(images_pil)={len(images_pil)} != num_images={num_images}")
 
     messages = _make_user_messages_with_images(user_text=user_text, num_images=num_images)
+
+    print("----------Detect input text--------------\n", messages)
+
     prompt = processor.tokenizer.apply_chat_template(
         messages,
         tokenize=False,

@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 from PIL import Image
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 from eval_real_time_qwen import HLPQwenV2, UPDATE_SYSTEM, DETECT_SYSTEM
 from eval_real_time_pi0 import (
@@ -112,7 +114,6 @@ def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str,
     return out
 
 
-
 def _to_pil_from_tensor(img_t) -> Image.Image:
     """
     Supports:
@@ -165,7 +166,6 @@ def _to_pil_from_tensor(img_t) -> Image.Image:
     return Image.fromarray(arr, mode="RGB")
 
 
-
 def eval_real_time_main_v3(
     hlp: HLPQwenV2,
     llp_cfg: LLPConfig,
@@ -189,9 +189,9 @@ def eval_real_time_main_v3(
 
     try:
         while True:
-            if kstate["quit"]:
-                logger.info("[MAIN] quit")
-                break
+            # if kstate["quit"]:
+            #     logger.info("[MAIN] quit")
+            #     break
 
             # robot zero
             if kstate["set_zero"]:
@@ -238,7 +238,7 @@ def eval_real_time_main_v3(
                             memory_in=prev_mem,
                             allowed=new_spec.allowed_actions,
                         )
-                        imgs_for_update = last_images_pil if last_images_pil is not None else _make_dummy_images(num_images)
+                        imgs_for_update = last_images_pil if last_images_pil is not None1 else _make_dummy_images(num_images)
                         batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u, num_images=num_images)
                         t0 = time.time()
                         upd = hlp.update(batch_u)
@@ -253,7 +253,7 @@ def eval_real_time_main_v3(
                             f"Action='{current_memory.get('Action_Command','')}'"
                         )
 
-            # next inter (n): same task_id, switch to task_text[1] if exists, UPDATE 한번
+            # [Inter Episode Task] next inter (n): same task_id, switch to task_text[1] if exists, UPDATE 한번
             if kstate["next_inter"]:
                 kstate["next_inter"] = False
                 if current_task_id is None or global_instruction is None or current_memory is None:
@@ -276,6 +276,13 @@ def eval_real_time_main_v3(
                             allowed=spec.allowed_actions,
                         )
                         imgs_for_update = last_images_pil if last_images_pil is not None else _make_dummy_images(num_images)
+
+                        #############IMAGE DEBUG###################
+                        dbg = Path("/home/minji/Desktop/codes/RefMe-VLA/helm_rt_debug")
+                        dbg.mkdir(parents=True, exist_ok=True)
+                        images_pil[0].save(dbg / f"step{step:06d}_table.jpg")
+                        ########################################3
+
                         batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u, num_images=num_images)
                         t0 = time.time()
                         upd = hlp.update(batch_u)
@@ -315,7 +322,6 @@ def eval_real_time_main_v3(
             # 2장 모드면 wrist도 포함
             if llp_ctx.cfg is not None:
                 pass  # placeholder (no-op)
-
             if num_images == 2:
                 if wrist_img_t is None:
                     # wrist가 없으면 table로 대체(placeholder mismatch 방지)
@@ -324,8 +330,15 @@ def eval_real_time_main_v3(
                     wrist_pil = _to_pil_from_tensor(wrist_img_t)
                     images_pil.append(wrist_pil)
 
-            # task change / next_inter update에서 쓸 수 있게 캐시
+            # [image caching for UPDATE] task change / next_inter update에서 쓸 수 있게 캐시
             last_images_pil = images_pil
+
+
+            plt.figure()
+            plt.imshow(images_pil[0])
+            plt.title(f"table step={step}")
+            plt.axis("off")
+            plt.show()
 
             # make DETECT batch
             user_d = build_detect_user_text(
@@ -333,14 +346,17 @@ def eval_real_time_main_v3(
                 global_instruction=global_instruction,
                 memory_in=current_memory,
             )
+
             batch_d = create_hlp_detect_batch(hlp.processor, images_pil, user_d, num_images=num_images)
 
             t_detect0 = time.time()
-            # run DETECT
+            # [DETECT] run DETECT
             event = hlp.detect(batch_d)
             t_detect = time.time() - t_detect0
 
-            # [event happen!] -> [UPDATE MODE] (dummy image)
+            if event: print("EVENT DETECTED -> changing to UPDATE MODE")
+
+            # [event happen!] -> [UPDATE MODE]
             t_update = 0.0
             if event:
                 # send to original position
@@ -363,6 +379,7 @@ def eval_real_time_main_v3(
                     "Episodic_Context": upd.get("Episodic_Context", ""),
                     "Action_Command": upd.get("Action_Command", ""),
                 }
+                print(f"[Updated Memory]\n", current_memory)
 
             # [LLP] step - Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
@@ -381,7 +398,8 @@ def eval_real_time_main_v3(
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
             logger.info(
-                f"[MAIN] step={step} fps={fps:.2f} group='{task_group}' \n"
+                f"[MAIN] Action Done \n"
+                f"step={step} fps={fps:.2f} group='{task_group}' \n"
                 f"task_id='{current_task_id}' inter={current_inter_idx} event={event} \n"
                 f"current_memory = f{current_memory} \n"
                 f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s\n"
