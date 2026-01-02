@@ -22,8 +22,8 @@ def build_detect_user_text(detect_header: str, global_instruction: str, memory_i
         + f"Images: <image_table>\n"
         # + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
     )
-    print("[DETECT] user text input \n")
-    print(user_d)
+    # print("[DETECT] user text input \n")
+    # print(user_d)
 
     return user_d
 
@@ -48,8 +48,8 @@ def build_update_user_text(
         else:
             user += str(allowed)
 
-    print("[UPDATE] user text input \n")
-    print(user)
+    # print("[UPDATE] user text input \n")
+    # print(user)
     return user
 
 

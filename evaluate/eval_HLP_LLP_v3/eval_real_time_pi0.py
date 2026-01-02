@@ -273,7 +273,7 @@ def llp_step(
 
 def llp_send_zero(ctx: LLPRuntimeContext):
     if ctx.cfg.use_devices and ctx.piper is not None:
-        logging.info("[LLP] Sending zero configuration.")
+        logging.info("[0100LLP] Sending zero configuration.")
         set_zero_configuration(ctx.piper)
-        time.sleep(8)
+        time.sleep(5)
         logging.info("[LLP] Done zero configuration.")

@@ -10,6 +10,14 @@ TASK_KEYMAP: Dict[str, Dict[str, str]] = {
         "2": "press_blue_button_2",
         "3": "press_blue_button_3",
     },
+    "press_button_in_order": {
+        "1": "press_BGR",
+        "2": "press_BRG",
+        "3": "press_GBR",
+        "4": "press_GRB",
+        "5": "press_RBG",
+        "6": "press_RGB",
+    },
     "press_button_N_times_M_times_total": {
         "1": "press_blue_button_1+1",
         "2": "press_blue_button_1+2",

@@ -321,7 +321,6 @@ def eval_real_time_main_v3(
             # UPDATE에서 재사용할 수 있게 캐시
             last_obs_pil = obs_pil
 
-
             plt.figure()
             plt.imshow(obs_pil)
             plt.title(f"table step={step}")
@@ -334,15 +333,12 @@ def eval_real_time_main_v3(
                 global_instruction=global_instruction,
                 memory_in=current_memory,
             )
-
-
             batch_d = create_hlp_detect_batch(hlp.processor, obs_pil, user_d)
-
             t_detect0 = time.time()
+
             # [DETECT] run DETECT
             event = hlp.detect(batch_d)
             t_detect = time.time() - t_detect0
-
             if event: print("EVENT DETECTED -> changing to UPDATE MODE")
 
             # [event happen!] -> [UPDATE MODE]
@@ -359,6 +355,11 @@ def eval_real_time_main_v3(
                     memory_in=current_memory,
                     allowed=spec.allowed_actions,
                 )
+                plt.figure()
+                plt.imshow(obs_pil)
+                plt.title(f"[UPDATE] image for debug | table step={step}")
+                plt.axis("off")
+                plt.show()
                 batch_u = create_hlp_update_batch(hlp.processor, obs_pil, user_u)
                 t_up0 = time.time()
                 upd = hlp.update(batch_u)
@@ -386,6 +387,8 @@ def eval_real_time_main_v3(
 
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
+            print(f"[MAIN] current_memory = f{current_memory} \n")
+            print("=========================================================[END STEP]=================================================================")
             # logger.info(
             #     f"[MAIN] Action Done \n"
             #     f"step={step} fps={fps:.2f} group='{task_group}' \n"
