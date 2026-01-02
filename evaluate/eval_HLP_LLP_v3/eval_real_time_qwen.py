@@ -145,13 +145,15 @@ class HLPQwenV2:
             trust_remote_code=True,
         )
         model = PeftModel.from_pretrained(base, adapter_path)
-        # self.model = model.merge_and_unload().eval()
         self.model = model.eval()
+        # self.model = model.merge_and_unload().eval()
+        print("[HLP] adapter merged", adapter_path)
         print(f"[HLP] load done: {time.time()-t0:.2f}s")
 
     @torch.no_grad()
     def _generate_text(self, batch: Dict[str, torch.Tensor], max_new_tokens: int) -> str:
         inputs = {}
+        import sys
         for k, v in batch.items():
             if v is None:
                 continue
@@ -173,15 +175,17 @@ class HLPQwenV2:
         return out_text
 
     def detect(self, batch: Dict[str, torch.Tensor]) -> bool:
-        print("[HLP]===DETECT MODE===")
+        print("\n[HLP]===DETECT MODE===")
         out_text = self._generate_text(batch, self.max_new_tokens_detect)
-        print("[HLP] raw output: \n", out_text)
+        print("[DETECT] raw output \n", out_text)
+        print("---------------------------------------------------")
 
         return parse_detect_yaml(out_text)
 
     def update(self, batch: Dict[str, torch.Tensor]) -> Dict[str, str]:
-        print("[HLP]===UPDATE MODE===")
+        print("\n[HLP]===UPDATE MODE===")
         out_text = self._generate_text(batch, self.max_new_tokens_update)
-        print("[HLP] raw output: \n", out_text)
+        print("[UPDATE] raw output \n", out_text)
+        print("---------------------------------------------------")
 
         return parse_update_yaml(out_text)

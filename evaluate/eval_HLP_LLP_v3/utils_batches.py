@@ -15,13 +15,17 @@ def build_detect_user_text(detect_header: str, global_instruction: str, memory_i
     wm = memory_in.get("Working_Memory", "None")
     ec = memory_in.get("Episodic_Context", "None")
     mem =  f"Action_Command: {ac} | Working_Memory: {wm} | Episodic_Context: {ec}"
-    return (
+    user_d = (
         detect_header
         + f"Task: {str(global_instruction).strip()}\n"
         + f"Memory: {mem}\n"
         + f"Images: <image_table>\n"
         # + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
     )
+    print("[DETECT] user text input \n")
+    print(user_d)
+
+    return user_d
 
 
 def build_update_user_text(
@@ -43,6 +47,9 @@ def build_update_user_text(
             user += "\n".join([f"- {str(x)}" for x in allowed])
         else:
             user += str(allowed)
+
+    print("[UPDATE] user text input \n")
+    print(user)
     return user
 
 
@@ -60,19 +67,16 @@ def create_hlp_detect_batch(processor, obs_pil, user_text: str):
     DETECT batch 생성.
     images_pil: List[PIL] (len==num_images)
     """
-
-
     messages = _make_user_messages_with_images(user_text=user_text)
 
-    print("----------Detect input text--------------\n", messages)
-
+    # print("----------Detect input text--------------\n", messages)
     prompt = processor.tokenizer.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=True,
     )
     return processor(
-        text=user_text,
+        text=prompt,
         images = obs_pil,  # IMPORTANT: single PIL, no nested list
         padding = True,
         return_tensors = "pt",
@@ -84,10 +88,8 @@ def create_hlp_update_batch(processor, obs_pil, user_text: str, num_images: int 
     UPDATE batch 생성.
     v3 정합: dummy 이미지 금지 -> 실시간 캡처 이미지(1장 또는 2장)를 그대로 넣는다.
     """
-
     messages = _make_user_messages_with_images(user_text=user_text)
-
-    print("----------Detect input text--------------\n", messages)
+    # print("----------Detect input text--------------\n", messages)
 
     prompt = processor.tokenizer.apply_chat_template(
         messages,
@@ -95,7 +97,7 @@ def create_hlp_update_batch(processor, obs_pil, user_text: str, num_images: int 
         add_generation_prompt=True,
     )
     return processor(
-            text=user_text,
+            text=prompt,
             images = obs_pil,  # IMPORTANT: single PIL, no nested list
             padding = True,
             return_tensors = "pt",

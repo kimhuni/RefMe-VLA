@@ -13,11 +13,12 @@ from transformers import (
     BitsAndBytesConfig,
 )
 from peft import PeftModel
+import matplotlib.pyplot as plt
 
 """
-python simple_realtime_hlp.py \
-  --base_model /path/to/Qwen2.5-VL \
-  --adapter /path/to/checkpoint
+python evaluate/eval_helm_v3/eval_helm_real_time_v3.py \
+  --base_model /home/minji/Desktop/data/ckpt/Qwen2.5-VL-7B-Instruct \
+  --adapter /home/minji/Desktop/data/finetuned_model/ghkim/HLP/HeLM_v3/push_the_button_N_times/checkpoint-3200
 """
 
 # ======================================================
@@ -249,6 +250,10 @@ def main():
             # apply_chat_template을 쓰면 <image> 토큰이 자동 삽입됨.
             # 따라서 텍스트 프롬프트에는 이미지 태그를 *텍스트로* 넣을 필요가 없을 수도 있음(Qwen2.5-VL).
             # 하지만 eval_helm_hlp_v3는 user_prompt 텍스트를 그대로 넘김.
+
+            plt.imshow(obs_pil)
+            plt.axis("off")
+            plt.show()
 
             # 수동 구성 (templates.py 참조):
             final_prompt_text = (

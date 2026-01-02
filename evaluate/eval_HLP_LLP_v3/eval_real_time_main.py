@@ -238,6 +238,7 @@ def eval_real_time_main_v3(
                             allowed=new_spec.allowed_actions,
                         )
                         obs_pil_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
+
                         batch_u = create_hlp_update_batch(hlp.processor, obs_pil_for_update, user_u)
                         t0 = time.time()
                         upd = hlp.update(batch_u)
@@ -275,15 +276,15 @@ def eval_real_time_main_v3(
                             allowed=spec.allowed_actions,
                         )
                         imgs_for_update = last_images_pil if last_images_pil is not None else _make_dummy_images(num_images)
-
-                        #############IMAGE DEBUG###################
-                        dbg = Path("/home/minji/Desktop/codes/RefMe-VLA/helm_rt_debug")
-                        dbg.mkdir(parents=True, exist_ok=True)
-                        images_pil[0].save(dbg / f"step{step:06d}_table.jpg")
-                        ########################################3
-
                         batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u, num_images=num_images)
                         t0 = time.time()
+
+                        plt.figure()
+                        plt.imshow(imgs_for_update)
+                        plt.title(f"[UPDATE] image for debug | table step={step}")
+                        plt.axis("off")
+                        plt.show()
+
                         upd = hlp.update(batch_u)
                         dt = time.time() - t0
                         current_memory = {
@@ -334,6 +335,7 @@ def eval_real_time_main_v3(
                 memory_in=current_memory,
             )
 
+
             batch_d = create_hlp_detect_batch(hlp.processor, obs_pil, user_d)
 
             t_detect0 = time.time()
@@ -357,7 +359,7 @@ def eval_real_time_main_v3(
                     memory_in=current_memory,
                     allowed=spec.allowed_actions,
                 )
-                batch_u = create_hlp_update_batch(hlp.processor, obs_pil, user_d)
+                batch_u = create_hlp_update_batch(hlp.processor, obs_pil, user_u)
                 t_up0 = time.time()
                 upd = hlp.update(batch_u)
                 t_update = time.time() - t_up0
@@ -366,7 +368,7 @@ def eval_real_time_main_v3(
                     "Episodic_Context": upd.get("Episodic_Context", ""),
                     "Action_Command": upd.get("Action_Command", ""),
                 }
-                print(f"[Updated Memory]\n", current_memory)
+                # print(f"[Updated Memory]\n", current_memory)
 
             # [LLP] step - Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
@@ -384,14 +386,14 @@ def eval_real_time_main_v3(
 
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
-            logger.info(
-                f"[MAIN] Action Done \n"
-                f"step={step} fps={fps:.2f} group='{task_group}' \n"
-                f"task_id='{current_task_id}' inter={current_inter_idx} event={event} \n"
-                f"current_memory = f{current_memory} \n"
-                f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s\n"
-                "=========================================================================================================================="
-            )
+            # logger.info(
+            #     f"[MAIN] Action Done \n"
+            #     f"step={step} fps={fps:.2f} group='{task_group}' \n"
+            #     f"task_id='{current_task_id}' inter={current_inter_idx} event={event} \n"
+            #     f"current_memory = f{current_memory} \n"
+            #     f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s\n"
+            #     "=========================================================================================================================="
+            # )
 
     finally:
         try:
