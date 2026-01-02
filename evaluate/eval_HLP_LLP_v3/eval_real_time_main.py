@@ -53,7 +53,7 @@ class TaskSpecRuntime:
     allowed_actions: str            # list of allowed action commands
 
 
-def _make_dummy_image(num_images: int, size: Tuple[int, int] = (224, 224)) -> List[Image.Image]:
+def _make_dummy_image(size: Tuple[int, int] = (224, 224)) -> List[Image.Image]:
     """
     캡처 이미지가 아직 없을 때만 fallback으로 쓰는 black 이미지들.
     (가능하면 실시간에서는 캡처 이미지 사용을 권장)
@@ -207,7 +207,7 @@ def eval_real_time_main_v3(
                 logger.info("[MAIN] episode reset -> GI=None, memory=None, inter=0")
                 time.sleep(5)
 
-            # numeric task select
+            # [Memory Init]
             sel_tid = kstate.get("selected_task_id", None)
             if sel_tid is not None:
                 kstate["selected_task_id"] = None
@@ -275,8 +275,8 @@ def eval_real_time_main_v3(
                             memory_in=prev_mem,
                             allowed=spec.allowed_actions,
                         )
-                        imgs_for_update = last_images_pil if last_images_pil is not None else _make_dummy_images(num_images)
-                        batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u, num_images=num_images)
+                        imgs_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
+                        batch_u = create_hlp_update_batch(hlp.processor, imgs_for_update, user_u)
                         t0 = time.time()
 
                         plt.figure()
@@ -303,6 +303,8 @@ def eval_real_time_main_v3(
                 time.sleep(3)
                 continue
 
+
+            # Get Image
             state, obs_img_t, _wrist_img_t = capture_shared_observation(
                 piper=llp_ctx.piper,
                 table_rs_cam=llp_ctx.table_rs_cam,
@@ -327,6 +329,7 @@ def eval_real_time_main_v3(
             plt.axis("off")
             plt.show()
 
+            ########### [DETECT] ############
             # make DETECT batch
             user_d = build_detect_user_text(
                 DETECT_SYSTEM,
@@ -339,15 +342,18 @@ def eval_real_time_main_v3(
             # [DETECT] run DETECT
             event = hlp.detect(batch_d)
             t_detect = time.time() - t_detect0
-            if event: print("EVENT DETECTED -> changing to UPDATE MODE")
+            ###################################
+
 
             # [event happen!] -> [UPDATE MODE]
             t_update = 0.0
             if event:
+                ########################## [UPDATE] ###########################
                 # send to original position
                 llp_send_zero(llp_ctx)
+                print("EVENT DETECTED -> changing to [UPDATE] MODE")
 
-                # UPDATE memory
+                # UPDATE batch
                 spec = specs[current_task_id]
                 user_u = build_update_user_text(
                     UPDATE_SYSTEM,
@@ -355,11 +361,14 @@ def eval_real_time_main_v3(
                     memory_in=current_memory,
                     allowed=spec.allowed_actions,
                 )
+
+                # DEBUG image
                 plt.figure()
                 plt.imshow(obs_pil)
                 plt.title(f"[UPDATE] image for debug | table step={step}")
                 plt.axis("off")
                 plt.show()
+
                 batch_u = create_hlp_update_batch(hlp.processor, obs_pil, user_u)
                 t_up0 = time.time()
                 upd = hlp.update(batch_u)
@@ -370,6 +379,7 @@ def eval_real_time_main_v3(
                     "Action_Command": upd.get("Action_Command", ""),
                 }
                 # print(f"[Updated Memory]\n", current_memory)
+                ###############################################################
 
             # [LLP] step - Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
@@ -388,7 +398,7 @@ def eval_real_time_main_v3(
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
             print(f"[MAIN] current_memory = f{current_memory} \n")
-            print("=========================================================[END STEP]=================================================================")
+            print("=========================================================[Action Done]=================================================================")
             # logger.info(
             #     f"[MAIN] Action Done \n"
             #     f"step={step} fps={fps:.2f} group='{task_group}' \n"

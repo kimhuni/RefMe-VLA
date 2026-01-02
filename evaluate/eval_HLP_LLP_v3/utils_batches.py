@@ -9,6 +9,12 @@ def _yaml_dump(d: Dict[str, Any]) -> str:
     # training과 동일하게 stable yaml (짧고 안전)
     return yaml.safe_dump(d, sort_keys=False, allow_unicode=True).strip()
 
+def render_memory_one_line(mem: Dict[str, str]) -> str:
+    # prompt 입력은 한 줄로 짧게, 출력은 YAML로 강제
+    ac = mem.get("Action_Command", "None")
+    wm = mem.get("Working_Memory", "None")
+    ec = mem.get("Episodic_Context", "None")
+    return f"Action_Command: {ac} | Working_Memory: {wm} | Episodic_Context: {ec}"
 
 def build_detect_user_text(detect_header: str, global_instruction: str, memory_in: Dict[str, Any]) -> str:
     ac = memory_in.get("Action_Command", "None")
@@ -34,19 +40,17 @@ def build_update_user_text(
     memory_in: Dict[str, Any],
     allowed: str = None,
 ) -> str:
+    allowed_block = ""
+    if allowed.strip():
+        allowed_block = f"\nAllowed_Action_Commands:\n{allowed.strip()}\n"
+
     user = (
-        update_header
-        + "\nGlobal_Instruction:\n"
-        + str(global_instruction).strip()
-        + "\n\nPrev_Memory:\n"
-        + _yaml_dump(memory_in if isinstance(memory_in, dict) else {})
+        f"{update_header}\n"
+        + f"Task: {str(global_instruction).strip()}\n"
+        + f"Previous_Memory: {render_memory_one_line(memory_in)}\n"
+        + f"{allowed_block}"
+        + f"Images: <image_table>"
     )
-    if allowed is not None:
-        user += "\n\nAllowed_Action_Commands:\n"
-        if isinstance(allowed, list):
-            user += "\n".join([f"- {str(x)}" for x in allowed])
-        else:
-            user += str(allowed)
 
     # print("[UPDATE] user text input \n")
     # print(user)
