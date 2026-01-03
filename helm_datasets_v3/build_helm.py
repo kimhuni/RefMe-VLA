@@ -14,11 +14,19 @@ from helm_datasets_v3.core.data_index import DataEpisodeV3, iter_all_episodes, l
 from helm_datasets_v3.core.io_utils import frame_path
 from helm_datasets_v3.core.templates import dump_yaml, make_detect_prompt, make_update_prompt
 
-"""
-python -m helm_datasets_v3.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_button_nolight" \
+"""python -m helm_datasets_v3.build_helm \
+  --out_root "/data/ghkim/helm_test/press_the_button_nolight" \
   --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/press_button_N_times" \
   --tasks "press_blue_button_1" "press_blue_button_2" "press_blue_button_3" \
+  --fps_out 5 \
+  --n_images 1 \
+  --val_ratio 0.1 \
+  --shard_size 5000
+
+python -m helm_datasets_v3.build_helm \
+  --out_root "/data/ghkim/helm_data/press_the_button_nolight" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/press_button_in_order" \
+  --tasks "press_RGB" "press_RBG" "press_GBR" "press_GRB" "press_BRG" "press_BGR" \
   --fps_out 5 \
   --n_images 1 \
   --val_ratio 0.1 \

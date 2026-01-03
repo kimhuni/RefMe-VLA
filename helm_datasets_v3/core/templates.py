@@ -27,29 +27,68 @@ DETECT_SYSTEM = (
     "Return YAML with exactly one key: Event_Detected (boolean).\n"
 )
 
+# [Original]
+# UPDATE_SYSTEM = (
+#     "You are the robot arm Logic State Manager.\n"
+#     "Context: Event_Detected=true or a Task Change has occurred.\n"
+#     "Inputs:\n"
+#     "- Global_Instruction defining the overall task.\n"
+#     "- Previous memory state (with keys: Working_Memory, Episodic_Context, Action_Command).\n"
+#     "- Allowed_Action_Commands (a small fixed list)"
+#     "Goal: Produce the next memory state after the event, preserving information"
+#     "and decide the next Action_Command based on the Global_Instruction.\n"
+#     "Logic Rules ((copy-first, lossless)):\n"
+#     "1) Start by COPYING Previous_Memory fields.\n"
+#     "2) Update Working_Memory to reflect the newly completed step."
+#     "- Prefer appending or small edits over rewriting."
+#     "3) Episodic_Context:"
+#     "- If the task is not finished, keep it EXACTLY unchanged."
+#     "- If the task is finished, update it to summarize the final outcome."
+#     "4) Action_Command:"
+#     "- Must be EXACTLY one of Allowed_Action_Commands."
+#     "- Use done only when the task is finished."
+#     "Constraints:\n"
+#     "- Action_Command must be selected ONLY from Allowed_Action_Commands.\n"
+#     "- Do not add new actions or explanations.\n"
+#     "- Output YAML only with keys: Action_Command, Working_Memory, Episodic_Context.\n"
+# )
+
+# [Modified]
 UPDATE_SYSTEM = (
-    "You are the robot arm Logic State Manager.\n"
-    "Context: Event_Detected=true or a Task Change has occurred.\n"
+    "Role: Robot arm Logic State Manager (UPDATE mode).\n"
+    "Context: Event_Detected=true OR a Task Change has occurred.\n\n"
+
     "Inputs:\n"
-    "- Global_Instruction defining the overall task.\n"
-    "- Previous memory state (with keys: Working_Memory, Episodic_Context, Action_Command).\n"
-    "- Allowed_Action_Commands (a small fixed list)"
-    "Goal: Produce the next memory state after the event, preserving information"
-    "and decide the next Action_Command based on the Global_Instruction.\n"
-    "Logic Rules ((copy-first, lossless)):\n"
+    "- Global_Instruction: the overall task.\n"
+    "- Previous_Memory: YAML-like fields {Action_Command, Working_Memory, Episodic_Context}.\n"
+    "- Allowed_Action_Commands: a small fixed list. You MUST choose from it.\n\n"
+
+    "Goal:\n"
+    "Produce the NEXT memory state after the event (copy-first, lossless) and choose the next Action_Command.\n\n"
+
+    "Rules (copy-first, lossless):\n"
     "1) Start by COPYING Previous_Memory fields.\n"
-    "2) Update Working_Memory to reflect the newly completed step."
-    "- Prefer appending or small edits over rewriting."
-    "3) Episodic_Context:"
-    "- If the task is not finished, keep it EXACTLY unchanged."
-    "- If the task is finished, update it to summarize the final outcome."
-    "4) Action_Command:"
-    "- Must be EXACTLY one of Allowed_Action_Commands."
-    "- Use done only when the task is finished."
-    "Constraints:\n"
-    "- Action_Command must be selected ONLY from Allowed_Action_Commands.\n"
-    "- Do not add new actions or explanations.\n"
-    "- Output YAML only with keys: Action_Command, Working_Memory, Episodic_Context.\n"
+    "2) Update Working_Memory ONLY to reflect what has just been completed.\n"
+    "   - Prefer a small edit or append; do not rewrite unrelated info.\n"
+    "3) Episodic_Context:\n"
+    "   - If the overall task is NOT finished, keep Episodic_Context EXACTLY unchanged.\n"
+    "   - If the overall task IS finished, update Episodic_Context to a concise final summary/result.\n"
+    "4) Action_Command:\n"
+    "   - Must be EXACTLY one item from Allowed_Action_Commands.\n"
+    "   - Use 'done' ONLY when the overall task is finished.\n\n"
+
+    "Terminal-transition constraints (IMPORTANT):\n"
+    "- If the task is finished after this update:\n"
+    "  * Action_Command MUST be 'done'.\n"
+    "  * Working_Memory MUST be a terminal phrase (e.g., 'task done (...)').\n"
+    "  Episodic_Context must use terminal Working_Memory + Action_Command: done.\n"
+    "- Do NOT invent new actions. Do NOT change formatting or add extra keys.\n\n"
+
+    "Output format:\n"
+    "Return YAML with EXACTLY these keys (and nothing else):\n"
+    "Action_Command: <string>\n"
+    "Working_Memory: <string>\n"
+    "Episodic_Context: <string>\n"
 )
 
 def render_memory_one_line(mem: Dict[str, str]) -> str:

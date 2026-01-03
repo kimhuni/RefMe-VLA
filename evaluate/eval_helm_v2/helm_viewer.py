@@ -96,31 +96,28 @@ with img_col1:
 
 with col_gt:
     st.subheader("✅ Ground Truth")
-    st.code(yaml_block(sample.get("gt_yaml")), language="yaml")
+    gt = yaml_block(sample.get("gt_yaml"))
+    st.code(gt, language="yaml")
 
 with col_pred:
     st.subheader("🤖 Prediction")
-    st.code(yaml_block(sample.get("pred_yaml")), language="yaml")
+    pd = yaml_block(sample.get("pred_yaml"))
+    st.code(pd, language="yaml")
 
 # -----------------------------
 # Match Indicators
 # -----------------------------
-st.markdown("## 📊 Match Status")
+# st.markdown("## 📊 Match Status")
+#
+# mc = sample.get("match_cmd")
+# mp = sample.get("match_progress")
 
-mc = sample.get("match_cmd")
-mp = sample.get("match_progress")
+# col1 = st.columns(2)
+# with col1:
+#     if gt == pd:
+#         st.metric("✅ MATCH",)
+#     else: st.metric("!!! MISMATCH")
 
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(
-        "Command Match",
-        "✅ MATCH" if mc else "❌ MISMATCH",
-    )
-with col2:
-    st.metric(
-        "Progress Match",
-        "✅ MATCH" if mp else "❌ MISMATCH",
-    )
 
 # -----------------------------
 # Prompt (Optional)

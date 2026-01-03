@@ -29,18 +29,31 @@ from peft import PeftModel
 logger = logging.getLogger("eval_helm_v3")
 
 """
-CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_v2/eval_helm_hlp_v3.py \
+CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
   --jsonl /data/ghkim/helm_data/wipe_the_window/jsonl_v3/merged/wipe_the_window/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /result/ghkim/HLP_HeLM_v3_wipe_the_window_2240_0101/checkpoint-1900 \
   --max_samples 200 --seed 123 \
   --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v3_wipe_the_window_2240_0101/eval_preds_1900.jsonl
   
+[Pure Vanilla Model]
+CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
+  --jsonl /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \
+  --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
+  --max_samples 200 --seed 123 \
+  --out_jsonl /data/ghkim/helm_test/result/press_N_times/vanilla_modified_prompt.jsonl
+  
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
+  --jsonl /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3/original_merged/all_val.jsonl \
+  --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
+  --max_samples 200 --seed 123 \
+  --out_jsonl /data/ghkim/helm_test/result/press_N_times/vanilla_original_prompt.jsonl
+  
 CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v2/eval_helm_hlp_v3.py \
   --jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /result/ghkim/HLP_HeLM_v3_press_N_3320_0101/checkpoint-3200 \
-  --max_samples 200 --seed 123 \
+  --max_samples 300 --seed 123 \
   --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v3_press_N_3320_0101/eval_preds_vanilla.jsonl
 """
 
@@ -347,8 +360,9 @@ def load_model_and_processor(
         trust_remote_code=True,
     )
 
-    # if adapter_path:
-    #     model = PeftModel.from_pretrained(model, adapter_path)
+    if adapter_path:
+        model = PeftModel.from_pretrained(model, adapter_path)
+        print("merged with QLoRA adapter")
 
     model.eval()
     return model, processor

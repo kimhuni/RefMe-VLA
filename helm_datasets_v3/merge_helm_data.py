@@ -12,7 +12,14 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 # 전부 병합
 python helm_datasets_v3/merge_helm_data.py \
   --jsonl_root /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3 \
-  --out_dir   /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/wipe_the_window \
+  --out_dir   /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/press_button_in_order \
+  --tasks "press_RGB","press_RBG","press_GBR","press_GRB","press_BRG","press_BGR" \
+  --split_mode keep \
+  --shard_size 0
+  
+python helm_datasets_v3/merge_helm_data.py \
+  --jsonl_root /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3 \
+  --out_dir   /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3/merged \
   --split_mode keep \
   --shard_size 0
   
