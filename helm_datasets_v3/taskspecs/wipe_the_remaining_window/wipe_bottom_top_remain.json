@@ -1,0 +1,50 @@
+{
+  "task_id": "wipe_bottom_top_remain",
+  "inter": 1,
+  "intra": [2,1],
+  "task_text": [
+    "wipe the bottom and top parts of the window in order. each part of the window is wiped from left to right.",
+    "wipe the remaining part of the window. each part of the window is wiped from left to right."
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "wipe the bottom side of the window" },
+      { "tasks": "wipe the top side of the window" }
+    ],
+    [
+      { "tasks": "wipe the middle side of the window" }
+    ]
+  ],
+  "llp_commands": "wipe the bottom side of the window\nwipe the middle side of the window\nwipe the top side of the window\ndone",
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "wipe the bottom side of the window",
+        "Working_Memory": "Completed: none (Goal: bottom, top)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "wipe the top side of the window",
+        "Working_Memory": "Completed: bottom (Goal: bottom, top)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Wiped: bottom, top"
+      }
+    ],
+    [
+      {
+        "Action_Command": "wipe the middle side of the window",
+        "Working_Memory": "Completed: none (Goal: middle)",
+        "Episodic_Context": "Previous_Wiped: bottom, top"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Wiped: bottom, middle, top"
+      }
+    ]
+  ]
+}

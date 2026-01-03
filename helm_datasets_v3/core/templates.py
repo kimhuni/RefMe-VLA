@@ -81,14 +81,10 @@ UPDATE_SYSTEM = (
     "- If the task is finished after this update:\n"
     "  * Action_Command MUST be 'done'.\n"
     "  * Working_Memory MUST be a terminal phrase (e.g., 'task done (...)').\n"
-    "  Episodic_Context must use terminal Working_Memory + Action_Command: done.\n"
+    "  When finished, Episodic_Context must follow similar style implied by Global_Instruction/Previous_Memory\n"
     "- Do NOT invent new actions. Do NOT change formatting or add extra keys.\n\n"
 
-    "Output format:\n"
-    "Return YAML with EXACTLY these keys (and nothing else):\n"
-    "Action_Command: <string>\n"
-    "Working_Memory: <string>\n"
-    "Episodic_Context: <string>\n"
+    "Output YAML only with keys: Action_Command, Working_Memory, Episodic_Context.\n"
 )
 
 def render_memory_one_line(mem: Dict[str, str]) -> str:
