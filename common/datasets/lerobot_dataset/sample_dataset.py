@@ -85,7 +85,7 @@ if __name__ == '__main__':
     # sample_target = generate_unique_random_numbers_in_intervals(0, 2759, 2160, 600)
 
     # directory to merge
-    target_dir = '/data/ghkim/press_the_button_half'
+    target_dir = '/data/ghkim/open_the_drawer'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
@@ -93,16 +93,19 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
     # merge dataset 1
-    data_dir = '/data/ghkim/press_the_button_half/press the blue button/lerobot_5hz'
+    data_dir = '/data/ghkim/open_the_drawer/open_leftdown_drawer/lerobot_5hz'
     sample_dataset(sample_target, data_dir, target_dir, 0)
 
     # merge dataset 2
-    data_dir = '/data/ghkim/press_the_button_half/press the green button/lerobot_5hz'
+    data_dir = '/data/ghkim/open_the_drawer/open_leftup_drawer/lerobot_5hz'
     sample_dataset(sample_target, data_dir, target_dir, 20)
 
     # merge dataset 3
-    data_dir = '/data/ghkim/press_the_button_half/press the red button/lerobot_5hz'
+    data_dir = '/data/ghkim/open_the_drawer/open_rightdown_drawer/lerobot_5hz'
     sample_dataset(sample_target, data_dir, target_dir, 40)
+
+    data_dir = '/data/ghkim/open_the_drawer/open_rightup_drawer/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 60)
 
     print(f"merged at {sample_target}")
 

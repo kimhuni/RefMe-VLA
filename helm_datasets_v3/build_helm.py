@@ -14,7 +14,26 @@ from helm_datasets_v3.core.data_index import DataEpisodeV3, iter_all_episodes, l
 from helm_datasets_v3.core.io_utils import frame_path
 from helm_datasets_v3.core.templates import dump_yaml, make_detect_prompt, make_update_prompt
 
-"""python -m helm_datasets_v3.build_helm \
+"""
+python -m helm_datasets_v3.build_helm \
+  --out_root "/data/ghkim/helm_data/wipe_the_remaining_window" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/wipe_the_remaining_window" \
+  --tasks "wipe_bottom_remain" "wipe_middle_remain" "wipe_top_remain" "wipe_bottom_middle_remain" "wipe_bottom_top_remain" "wipe_middle_top_remain"\
+  --fps_out 5 \
+  --n_images 1 \
+  --val_ratio 0.1 \
+  --shard_size 5000
+
+python -m helm_datasets_v3.build_helm \
+  --out_root "/data/ghkim/helm_data/press_button_N_times_M_times_total" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/press_button_N_times_M_times_total" \
+  --tasks "press_blue_button_1+1" "press_blue_button_1+2" "press_blue_button_1+3" "press_blue_button_2+1" "press_blue_button_2+2" "press_blue_button_2+3" "press_blue_button_3+1" "press_blue_button_3+2" "press_blue_button_3+3" \
+  --fps_out 5 \
+  --n_images 1 \
+  --val_ratio 0.1 \
+  --shard_size 5000
+
+python -m helm_datasets_v3.build_helm \
   --out_root "/data/ghkim/helm_test/press_the_button_nolight" \
   --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v3/taskspecs/press_button_N_times" \
   --tasks "press_blue_button_1" "press_blue_button_2" "press_blue_button_3" \

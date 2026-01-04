@@ -1,8 +1,8 @@
 {
   "task_id": "press_blue_button_2+3",
 
-  "max_inter": 1,
-  "max_intra": [2, 3],
+  "inter": 1,
+  "intra": [2, 3],
 
   "task_text": [
     "press the blue button two times",

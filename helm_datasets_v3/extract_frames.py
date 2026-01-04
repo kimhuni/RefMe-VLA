@@ -6,9 +6,9 @@ import json
 from typing import Any, Dict, Optional
 from helm_datasets_v2.utils.io_utils import ensure_dir, frames_dir, list_chunks_from_videos, episode_json_path, read_json
 """
-python -m helm_datasets_v2.extract_frames \
+python -m helm_datasets_v3.extract_frames \
   --lerobot_root "/data/ghkim/press_the_button_nolight" \
-  --out_root     "/data/ghkim/helm_data/press_the_button_nolight" \
+  --out_root     "/data/ghkim/helm_data/press_button_N_times_M_times_total" \
   --fps_frames 5
 """
 

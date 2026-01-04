@@ -27,6 +27,34 @@ from train.train_helm_v3.helm_dataset import (
 )
 
 """
+CUDA_VISIBLE_DEVICES=6 python train/train_helm_v3/train_helm.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3/merged/all_train.jsonl \
+  --num_images 1 \
+  --output_dir /result/ghkim/HLP_HeLM_wipe_the_remaining_window_2240_0103 \
+  --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 4 --n_update_transition 0 \
+  --num_train_epochs 10 \
+  --with_replacement True \
+  --attn_impl sdpa \
+  --eval_max_samples 40 \
+  --wandb_project RefMe \
+  --wandb_run_name HLP_HeLM_wipe_the_remaining_window_2240_0103
+  
+CUDA_VISIBLE_DEVICES=7 python train/train_helm_v3/train_helm.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v3/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v3/merged/all_val.jsonl \
+  --num_images 1 \
+  --output_dir /result/ghkim/HLP_HeLM_press_button_N_times_M_times_total_2240_0103 \
+  --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 4 --n_update_transition 0 \
+  --num_train_epochs 10 \
+  --with_replacement True \
+  --attn_impl sdpa \
+  --eval_max_samples 40 \
+  --wandb_project RefMe \
+  --wandb_run_name HLP_HeLM_press_button_N_times_M_times_total_2240_0103
+
 CUDA_VISIBLE_DEVICES=4 python train/train_helm_v3/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
   --train_jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/press_button_in_order/all_train.jsonl \
