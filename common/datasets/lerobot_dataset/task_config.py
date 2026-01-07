@@ -9,4 +9,11 @@ TASKS_DICT = {
         '7' : "open the top left drawer",
         '8' : "open the bottom right drawer",
         '9' : "open the top right drawer",
+        '10' : "pick up the banana from the blue plate and place it on the red plate",
+        '11' : "pick up the banana from the blue plate and place it on the white plate",
+        '12' : "pick up the banana from the red plate and place it on the blue plate",
+        '13' : "pick up the banana from the red plate and place it on the white plate",
+        '14' : "pick up the banana from the white plate and place it on the blue plate",
+        '15' : "pick up the banana from the white plate and place it on the red plate",
+        '16' : "press the orange button",
     }

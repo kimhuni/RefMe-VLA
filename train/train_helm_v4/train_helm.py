@@ -1,4 +1,4 @@
-# train_helm_v3.py
+# train_helm_v4.py
 from __future__ import annotations
 
 import argparse
@@ -18,9 +18,9 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-from train.train_helm_v3.helm_dataset import (
-    HelmJsonlDatasetV3,
-    V3DatasetConfig,
+from train.train_helm_v4.helm_dataset import (
+    HelmJsonlDatasetV4,
+    V4DatasetConfig,
     DataCollatorForQwenVL,
     read_jsonl,
     count_labels,
@@ -29,19 +29,48 @@ from train.train_helm_v3.helm_dataset import (
 """
 export PYTHONPATH=$(pwd)
 # Qwen 3b model test #
-CUDA_VISIBLE_DEVICES=6 python train/train_helm_v3/train_helm.py \
+CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-3B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3/merged/all_val.jsonl \
+  --train_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_val.jsonl \
   --num_images 1 \
-  --output_dir /result/ghkim/test/HLP_HeLM_qwen_3b_wipe_the_remaining_window_test \
-  --batch_size 10 --n_detect_pos 4 --n_detect_neg 4 --n_update_intra 2 --n_update_transition 0 \
+  --output_dir /result/ghkim/test/HLP_HeLM_v4_qwen_3b_press_button_N_times \
+  --batch_size 6 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 1 --n_update_transition 1 \
   --num_train_epochs 10 \
   --with_replacement True \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_wipe_the_remaining_window_test
+  --wandb_run_name HLP_HeLM_v4_qwen_3b_press_button_N_times
+
+# Qwen 7b mode
+CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_val.jsonl \
+  --num_images 1 \
+  --output_dir /result/ghkim/HLP_HeLM_v4_qwen_7b_press_button_N_times \
+  --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
+  --num_train_epochs 10 \
+  --with_replacement True \
+  --attn_impl sdpa \
+  --eval_max_samples 40 \
+  --wandb_project RefMe \
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_press_button_N_times
+  
+CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/press_the_button_in_order/jsonl_v4/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_the_button_in_order/jsonl_v4/merged/all_val.jsonl \
+  --num_images 1 \
+  --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_press_button_in_order \
+  --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
+  --num_train_epochs 10 \
+  --with_replacement True \
+  --attn_impl sdpa \
+  --eval_max_samples 40 \
+  --wandb_project RefMe \
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_press_button_in_order
   
 CUDA_VISIBLE_DEVICES=7 python train/train_helm_v3/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
@@ -57,51 +86,23 @@ CUDA_VISIBLE_DEVICES=7 python train/train_helm_v3/train_helm.py \
   --wandb_project RefMe \
   --wandb_run_name HLP_HeLM_press_button_N_times_M_times_total_2240_0103 \
   --save_steps 2000
-
-CUDA_VISIBLE_DEVICES=4 python train/train_helm_v3/train_helm.py \
-  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/press_button_in_order/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/press_button_in_order/all_val.jsonl \
-  --num_images 1 \
-  --output_dir /result/ghkim/HLP_HeLM_v3_press_button_in_order_2240_0102 \
-  --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 4 --n_update_transition 0 \
-  --num_train_epochs 10 \
-  --with_replacement True \
-  --attn_impl sdpa \
-  --eval_max_samples 40 \
-  --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v3_press_button_in_order_2240_0102 \
-  --save_steps 2000
-  
-CUDA_VISIBLE_DEVICES=5 python train/train_helm_v3/train_helm.py \
-  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/wipe_the_window/jsonl_v3/merged/wipe_the_window/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/wipe_the_window/jsonl_v3/merged/wipe_the_window/all_val.jsonl \
-  --num_images 1 \
-  --output_dir /result/ghkim/HLP_HeLM_v3_wipe_the_window_3320_0101 \
-  --batch_size 8 --n_detect_pos 3 --n_detect_neg 3 --n_update_intra 2 --n_update_transition 0 \
-  --num_train_epochs 10 \
-  --with_replacement True \
-  --attn_impl sdpa \
-  --eval_max_samples 40 \
-  --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v3_wipe_the_window_3320_0101 \
-  --save_steps 2000
-  
-CUDA_VISIBLE_DEVICES=3 python train/train_helm_v3/train_helm.py \
-  --model_name_or_path /ckpt/Qwen2.5-VL-3B-Instruct \
-  --train_jsonl /data/ghkim/press_the_button_nolight/jsonl_v3/merged/press_button_N_times/all_train.jsonl \
-  --val_jsonl /data/ghkim/press_the_button_nolight/jsonl_v3/merged/press_button_N_times/all_val.jsonl \
-  --num_images 1 \
-  --output_dir /result/ghkim/HLP_HeLM_v3_press_N_qwen3b \
-  --batch_size 6 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 0 \
-  --num_train_epochs 10 \
-  --with_replacement True \
-  --attn_impl sdpa \
-  --eval_max_samples 40 \
-  --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v3_press_N_qwen3b
 """
+
+from collections import Counter
+import json
+
+def print_label_stats(jsonl_path):
+    counter = Counter()
+    with open(jsonl_path, "r") as f:
+        for line in f:
+            row = json.loads(line)
+            counter[row["label"]] += 1
+
+    total = sum(counter.values())
+    print("\n[Train data label distribution]")
+    for k, v in counter.items():
+        print(f"  {k:>18}: {v:6d} ({v/total:.2%})")
+    print(f"  {'TOTAL':>18}: {total:6d}\n")
 
 # ---------------------------
 # Mixed Batch Sampler
@@ -324,19 +325,19 @@ def main():
         raise ValueError(f"Sum(n_detect_pos/n_detect_neg/n_update_*)={mix_sum} != batch_size={args.batch_size}")
 
     # -------- build datasets --------
-    train_cfg = V3DatasetConfig(
+    train_cfg = V4DatasetConfig(
         jsonl_path=args.train_jsonl,
         model_name_or_path=args.model_name_or_path,
         num_images=args.num_images,
     )
-    val_cfg = V3DatasetConfig(
+    val_cfg = V4DatasetConfig(
         jsonl_path=args.val_jsonl,
         model_name_or_path=args.model_name_or_path,
         num_images=args.num_images,
     )
 
-    train_ds = HelmJsonlDatasetV3(train_cfg)
-    val_ds = HelmJsonlDatasetV3(val_cfg)
+    train_ds = HelmJsonlDatasetV4(train_cfg)
+    val_ds = HelmJsonlDatasetV4(val_cfg)
 
     # label stats (for sanity)
     train_counts = {k: len(v) for k, v in train_ds.get_pools().items()}
@@ -400,6 +401,8 @@ def main():
         report_to=["wandb"],
         remove_unused_columns=False,
     )
+
+    print_label_stats(args.train_jsonl)
 
     trainer = MixedBatchTrainer(
         model=model,

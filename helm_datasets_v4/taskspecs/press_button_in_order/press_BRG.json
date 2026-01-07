@@ -1,0 +1,46 @@
+{
+  "task_id": "press_BRG",
+  "inter": 0,
+  "intra": [3],
+  "task_text": ["press the blue, red, green buttons in order"],
+  "episode_filters": [
+    [
+      { "tasks": "press the blue button" },
+      { "tasks": "press the red button" },
+      { "tasks": "press the green button" }
+    ]
+  ],
+  "llp_commands": "press the blue button\npress the green button\npress the red button\ndone",
+  "event_list": "blue button pressed\ngreen button pressed\nred button pressed\ndone",
+  "event_grid": [
+    [
+      "blue button pressed",
+      "red button pressed",
+      "green button pressed"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Progress: none (Goal: blue, red, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the red button",
+        "Working_Memory": "Progress: blue (Goal: blue, red, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the green button",
+        "Working_Memory": "Progress: blue, red (Goal: blue, red, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: blue, red, green"
+      }
+    ]
+  ]
+}

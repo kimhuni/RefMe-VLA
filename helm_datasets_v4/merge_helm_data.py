@@ -17,9 +17,9 @@ python helm_datasets_v3/merge_helm_data.py \
   --split_mode keep \
   --shard_size 0
   
-python helm_datasets_v3/merge_helm_data.py \
-  --jsonl_root /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3 \
-  --out_dir   /data/ghkim/helm_data/wipe_the_remaining_window/jsonl_v3/merged \
+python helm_datasets_v4/merge_helm_data.py \
+  --jsonl_root /data/ghkim/helm_data/press_the_button_in_order/jsonl_v4 \
+  --out_dir   /data/ghkim/helm_data/press_the_button_in_order/jsonl_v4/merged \
   --split_mode keep \
   --shard_size 0
   

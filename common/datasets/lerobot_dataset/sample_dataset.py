@@ -80,32 +80,55 @@ if __name__ == '__main__':
     # print(sample_target)
 
     # which episode you want to sample
-    sample_target = list(range(0, 20))
     # or random sample
     # sample_target = generate_unique_random_numbers_in_intervals(0, 2759, 2160, 600)
-
+    sample_target = list(range(0, 50))
     # directory to merge
-    target_dir = '/data/ghkim/open_the_drawer'
+    target_dir = '/data/ghkim/open_the_drawer_ep200'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'meta'), exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
+    ################### CHANGE TARGET DIRCTORY TOO !!!!!!!!!!!! #####################
+
     # merge dataset 1
-    data_dir = '/data/ghkim/open_the_drawer/open_leftdown_drawer/lerobot_5hz'
+    data_dir = '/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot_5hz'
     sample_dataset(sample_target, data_dir, target_dir, 0)
 
+    data_dir = '/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 50)
+
+    data_dir = '/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 100)
+
+    data_dir = '/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot_5hz'
+    sample_dataset(sample_target, data_dir, target_dir, 150)
+
+    # merge dataset 1
+    #data_dir = '/data/ghkim/pick_place_press/banana_blue_to_red/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 0)
+
     # merge dataset 2
-    data_dir = '/data/ghkim/open_the_drawer/open_leftup_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 20)
+    #data_dir = '/data/ghkim/pick_place_press/banana_blue_to_white/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 20)
 
     # merge dataset 3
-    data_dir = '/data/ghkim/open_the_drawer/open_rightdown_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 40)
+    #data_dir = '/data/ghkim/pick_place_press/banana_red_to_blue/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 40)
 
-    data_dir = '/data/ghkim/open_the_drawer/open_rightup_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 60)
+    #data_dir = '/data/ghkim/pick_place_press/banana_red_to_white/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 60)
+
+    #data_dir = '/data/ghkim/pick_place_press/banana_white_to_blue/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 80)
+
+    #data_dir = '/data/ghkim/pick_place_press/banana_white_to_red/lerobot_5hz'
+    #sample_dataset(sample_target, data_dir, target_dir, 100)
+
+    #data_dir = '/data/ghkim/pick_place_press/press_orange_button/lerobot_5hz'
+    #sample_dataset(list(range(0, 30)), data_dir, target_dir, 120)
 
     print(f"merged at {sample_target}")
 
