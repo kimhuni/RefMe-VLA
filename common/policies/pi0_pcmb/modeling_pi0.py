@@ -314,7 +314,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return self.paligemma_with_expert.get_output_embeddings()
 
     def embed_prefix(
-        self, images, img_masks, lang_tokens, lang_masks
+        self, images, img_masks, lang_tokens, lang_masks, return_spans: bool = False
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed images with SigLIP and language tokens with embedding layer to prepare
         for PaliGemma transformer processing.
@@ -324,11 +324,11 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         pad_masks = []
         att_masks = []
 
+        spans = {"img_spans": [], "lang_span": None}
+        cursor = 0
+
         # TODO: remove for loop
-        for (
-            img,
-            img_mask,
-        ) in zip(images, img_masks, strict=False):
+        for cam_idx, (img, img_mask) in enumerate(zip(images, img_masks, strict=False)):
             img_emb = self.paligemma_with_expert.embed_image(img)
             img_emb = img_emb.to(dtype=torch.bfloat16)
 
@@ -337,6 +337,10 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             img_emb = img_emb * torch.tensor(img_emb_dim**0.5, dtype=img_emb.dtype, device=img_emb.device)
 
             bsize, num_img_embs = img_emb.shape[:2]
+
+            spans["img_spans"].append((cam_idx, cursor, cursor + num_img_embs))  #
+            cursor += num_img_embs#
+
             img_mask = img_mask[:, None].expand(bsize, num_img_embs)
 
             embs.append(img_emb)
@@ -351,6 +355,10 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         lang_emb_dim = lang_emb.shape[-1]
         lang_emb = lang_emb * math.sqrt(lang_emb_dim)
 
+        bsize = lang_emb.shape[0]#
+        num_lang = lang_emb.shape[1]#
+        spans["lang_span"] = (cursor, cursor + num_lang)#
+
         embs.append(lang_emb)
         pad_masks.append(lang_masks)
 
@@ -363,6 +371,8 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         att_masks = torch.tensor(att_masks, dtype=torch.bool, device=pad_masks.device)
         att_masks = att_masks[None, :].expand(bsize, len(att_masks))
 
+        if return_spans:
+            return embs, pad_masks, att_masks, spans
         return embs, pad_masks, att_masks
 
     def embed_suffix(self, state, noisy_actions, timestep):
@@ -437,6 +447,21 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
             images, img_masks, lang_tokens, lang_masks
         )
+
+        ################################DEBUG############################################################
+        # spans (네가 준 값으로 고정 가능)
+        N_IMG = 512
+        IMG_S, IMG_E = 0, N_IMG
+        LANG_S, LANG_E = N_IMG, N_IMG + lang_tokens.shape[1]
+        COG_IDX = LANG_E - 1
+
+        per_tokens = prefix_embs[:, IMG_S:IMG_E, :]
+        if (torch.rand(()) < 0.1):  # 너무 많이 찍히지 않게
+            print("[DBG/train] prefix_embs", tuple(prefix_embs.shape))
+            print("[DBG/train] per_tokens ", tuple(per_tokens.shape))
+            print("[DBG/train] idx:", IMG_S, IMG_E, LANG_S, LANG_E, COG_IDX)
+        ##########################################################################################
+
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, time)
 
         pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
@@ -445,7 +470,8 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
         position_ids = torch.cumsum(pad_masks, dim=1) - 1
 
-        (_, suffix_out), _ = self.paligemma_with_expert.forward(
+        # (_, suffix_out), _ = self.paligemma_with_expert.forward(
+        (prefix_out, suffix_out), past_key_values = self.paligemma_with_expert.forward(
             attention_mask=att_2d_masks,
             position_ids=position_ids,
             past_key_values=None,
@@ -453,6 +479,15 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             use_cache=False,
             fill_kv_cache=False,
         )
+        ################################DEBUG############################################################
+        outputs_embeds = (prefix_out, suffix_out) #
+        prefix_out = outputs_embeds[0]  # (B, 560, 2048)
+        cog_token = prefix_out[:, COG_IDX, :]  # (B, 2048)
+
+        if (torch.rand(()) < 0.1):#
+            print("[DBG/train] prefix_out", tuple(prefix_out.shape))#
+            print("[DBG/train] cog_token ", tuple(cog_token.shape))#
+        ################################DEBUG############################################################
         suffix_out = suffix_out[:, -self.config.n_action_steps :]
         # Original openpi code, upcast attention output
         suffix_out = suffix_out.to(dtype=self.state_proj.weight.dtype)
@@ -475,13 +510,15 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
             images, img_masks, lang_tokens, lang_masks
         )
+
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
         torch.cuda.synchronize()
         t_image_encoders = log_time()
 
         # Compute image and language key value cache
-        _, past_key_values = self.paligemma_with_expert.forward(
+        # _, past_key_values = self.paligemma_with_expert.forward(
+        outputs_embeds, past_key_values = self.paligemma_with_expert.forward(
             attention_mask=prefix_att_2d_masks,
             position_ids=prefix_position_ids,
             past_key_values=None,
@@ -489,6 +526,8 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             use_cache=self.config.use_cache,
             fill_kv_cache=True,
         )
+
+
         t_observation_forward_pass = log_time()
 
         dt = -1.0 / self.config.num_steps

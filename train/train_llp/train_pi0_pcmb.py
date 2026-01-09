@@ -234,7 +234,7 @@ def train(cfg: TrainPipelineConfig):
         is_sorted = bool((fi1[1:] >= fi1[:-1]).all())
         # 연속(=차이가 1)인가? (프레임 드랍이 있으면 꼭 1일 필요는 없음)
         diffs = fi1[1:] - fi1[:-1]
-        print(f"[batch {b}] first_ep={first_ep} sorted={is_sorted} min_diff={int(diffs.min())} max_diff={int(diffs.max())}")
+        print(f"[batch {b}] first_ep={first_ep} sorted={is_sorted}")
 
         first_ep, last_ep = int(ep[0]), int(ep[-1])
         first_t, last_t = (int(fi[0]), int(fi[-1])) if fi is not None else (None, None)
