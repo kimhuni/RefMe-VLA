@@ -17,8 +17,8 @@ from helm_datasets_v4.core.templates import dump_yaml, make_detect_prompt, make_
 """
 export PYTHONPATH=$(pwd)
 python -m helm_datasets_v4.build_helm \
-  --out_root "/data/ghkim/helm_data/press_the_button_in_order" \
-  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/press_button_in_order" \
+  --out_root "/data/ghkim/helm_data/press_button_N_times_M_times_total" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/press_button_N_times_M_times_total" \
   --fps_out 5 \
   --n_images 1 \
   --val_ratio 0.1 \

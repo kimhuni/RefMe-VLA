@@ -8,9 +8,6 @@ import torch
 import torch.nn as nn
 import safetensors.torch as sft
 
-from common.policies.lora_ada import LoraADALinear
-from common.policies.lora import LoraConfig, LoraLinear
-from common.policies.lora_moe import LoraMoELinear
 from common.policies.adalora import AdaLoraConfig, AdaLoraLinear
 
 __all__ = [
@@ -23,7 +20,6 @@ __all__ = [
     "load_adapters_as_expert",
 ]
 
-from common.policies.lora_msp import LoraMSPLinear
 from common.policies.pretrained import PreTrainedPolicy
 
 
@@ -121,7 +117,7 @@ def load_adapters_as_expert(
 
 def inject_adapters(
     model: PreTrainedPolicy,
-    cfg: LoraConfig | AdaLoraConfig | None = None,
+    cfg: None = None,
     target_keywords: Iterable[str] | None = None,
     filter_fn: Callable[[str, nn.Module], bool] | None = None,
 ) -> Tuple[nn.Module, List[str]]:

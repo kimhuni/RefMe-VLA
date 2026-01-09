@@ -29,27 +29,34 @@ from peft import PeftModel
 logger = logging.getLogger("eval_helm_v3")
 
 """
-CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
-  --jsonl /data/ghkim/helm_data/wipe_the_window/jsonl_v3/merged/wipe_the_window/all_val.jsonl \
+CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
+  --jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v3/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter /result/ghkim/HLP_HeLM_v3_wipe_the_window_2240_0101/checkpoint-1900 \
+  --adapter /result/ghkim/HLP_HeLM_press_button_N_times_M_times_total_2240_0103/checkpoint-4400 \
   --max_samples 200 --seed 123 \
-  --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v3_wipe_the_window_2240_0101/eval_preds_1900.jsonl
+  --out_jsonl /data/ghkim/helm_data/result/press_button_N_times_M_times_total/eval_preds_4400.jsonl
+  
+CUDA_VISIBLE_DEVICES=2 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
+  --jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \
+  --base_model /ckpt/Qwen2.5-VL-3B-Instruct \
+  --adapter /result/ghkim/HLP_HeLM_v3_press_N_qwen3b/checkpoint-3900 \
+  --max_samples 200 --seed 123 \
+  --out_jsonl /data/ghkim/helm_data/press_the_button_nolight/result/eval_preds_3900.jsonl
   
 [Pure Vanilla Model]
-CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
+CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
   --jsonl /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --max_samples 200 --seed 123 \
   --out_jsonl /data/ghkim/helm_test/result/press_N_times/vanilla_modified_prompt.jsonl
   
-CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_v3/eval_helm_hlp_v3.py \
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
   --jsonl /data/ghkim/helm_test/press_the_button_nolight/jsonl_v3/original_merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --max_samples 200 --seed 123 \
   --out_jsonl /data/ghkim/helm_test/result/press_N_times/vanilla_original_prompt.jsonl
   
-CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v2/eval_helm_hlp_v3.py \
+CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v2/eval_helm_hlp_v4.py \
   --jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /result/ghkim/HLP_HeLM_v3_press_N_3320_0101/checkpoint-3200 \

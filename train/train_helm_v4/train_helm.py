@@ -44,19 +44,19 @@ CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --wandb_run_name HLP_HeLM_v4_qwen_3b_press_button_N_times
 
 # Qwen 7b mode
-CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
+CUDA_VISIBLE_DEVICES=4 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/press_button_N_times/jsonl_v4/merged/all_val.jsonl \
+  --train_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v4/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v4/merged/all_val.jsonl \
   --num_images 1 \
-  --output_dir /result/ghkim/HLP_HeLM_v4_qwen_7b_press_button_N_times \
+  --output_dir /result/ghkim/HLP_HeLM_v4_qwen_7b_press_button_N_times_M_times_total \
   --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
   --num_train_epochs 10 \
   --with_replacement True \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v4_qwen_7b_press_button_N_times
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_press_button_N_times_M_times_total
   
 CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \

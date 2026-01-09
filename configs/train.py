@@ -79,6 +79,8 @@ class TrainPipelineConfig(HubMixin):
     # If None or empty, all matching layers are wrapped.
     target_keywords: list[str] | None = None
 
+    gradient_checkpointing: bool = False
+
     # Adapter specific hyper-parameters (overrides defaults).
     qlora_cfg: dict[str, Any] | None = None
     lora_cfg: dict[str, Any] | None = None

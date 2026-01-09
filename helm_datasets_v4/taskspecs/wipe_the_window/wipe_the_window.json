@@ -5,36 +5,44 @@
   "task_text": [
     "wipe the bottom, middle, top part of the window in order. each part of the window is wiped from left to right."
   ],
-  "episode_filters" : [
+  "episode_filters": [
     [
-      {"tasks": "wipe the bottom side of the window"},
-      {"tasks": "wipe the middle side of the window"},
-      {"tasks": "wipe the top side of the window"}
+      { "tasks": "wipe the bottom side of the window" },
+      { "tasks": "wipe the middle side of the window" },
+      { "tasks": "wipe the top side of the window" }
     ]
   ],
-  "llp_commands": "wipe the bottom side of the window\n wipe the middle side of the window\n wipe the top side of the window\n done",
+  "llp_commands": "wipe the bottom side of the window\nwipe the middle side of the window\nwipe the top side of the window\ndone",
+  "event_list": "bottom side wiped\nmiddle side wiped\ntop side wiped\ndone",
+  "event_grid": [
+    [
+      "bottom side wiped",
+      "middle side wiped",
+      "top side wiped"
+    ]
+  ],
   "memory_grid": [
-  [
-    {
-      "Action_Command": "wipe the bottom side of the window",
-      "Working_Memory": "nothing wiped",
-      "Episodic_Context": "None"
-    },
-    {
-      "Action_Command": "wipe the middle side of the window",
-      "Working_Memory": "bottom side of the window wiped",
-      "Episodic_Context": "None"
-    },
-    {
-      "Action_Command": "wipe the top side of the window",
-      "Working_Memory": "bottom, middle side of the window wiped",
-      "Episodic_Context": "None"
-    },
-    {
-      "Action_Command": "done",
-      "Working_Memory": "task done (None)",
-      "Episodic_Context": "bottom, middle, top of the window wiped"
-    }
+    [
+      {
+        "Action_Command": "wipe the bottom side of the window",
+        "Working_Memory": "Progress: none (Goal: bottom, middle, top)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "wipe the middle side of the window",
+        "Working_Memory": "Progress: bottom (Goal: bottom, middle, top)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "wipe the top side of the window",
+        "Working_Memory": "Progress: bottom, middle (Goal: bottom, middle, top)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: bottom, middle, top"
+      }
+    ]
   ]
-]
 }

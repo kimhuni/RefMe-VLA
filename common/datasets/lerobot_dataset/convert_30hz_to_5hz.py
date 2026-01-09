@@ -85,20 +85,50 @@ def convert_30hz_to_5hz(source_base_path, dest_base_path, index, task_index):
 if __name__ == "__main__":
     # for i in tqdm(range(0,20)):
     #     convert_30hz_to_5hz("/data/ghkim/wipe_the_window/lerobot", "/data/ghkim/wipe_the_window/lerobot_5hz", i)
-    for i in tqdm(range(0, 20)):
-        convert_30hz_to_5hz("/data/ghkim/press_the_button_half/press the blue button/lerobot",
-                            "/data/ghkim/press_the_button_half/press the blue button/lerobot_5hz",
-                            i,2)
+    # for i in tqdm(range(0, 20)):
+    #     convert_30hz_to_5hz("/data/ghkim/pick_place_press/banana_blue_to_red/lerobot",
+    #                         "/data/ghkim/pick_place_press/banana_blue_to_red/lerobot_5hz",
+    #                         i,10)
+    #
+    # for i in tqdm(range(0, 20)):
+    #     convert_30hz_to_5hz("/data/ghkim/pick_place_press/banana_blue_to_white/lerobot",
+    #                         "/data/ghkim/pick_place_press/banana_blue_to_white/lerobot_5hz",
+    #                         i,11)
+    #
+    # for i in tqdm(range(0, 20)):
+    #     convert_30hz_to_5hz("/data/ghkim/pick_place_press/banana_red_to_blue/lerobot",
+    #                         "/data/ghkim/pick_place_press/banana_red_to_blue/lerobot_5hz",
+    #                         i,12)
+    #
+    # for i in tqdm(range(0, 20)):
+    #     convert_30hz_to_5hz("/data/ghkim/pick_place_press/banna_red_to_white/lerobot",
+    #                         "/data/ghkim/pick_place_press/banana_red_to_white/lerobot_5hz",
+    #                         i,13)
+    #
+    # for i in tqdm(range(0, 20)):
+    #     convert_30hz_to_5hz("/data/ghkim/pick_place_press/banana_white_to_blue/lerobot",
+    #                         "/data/ghkim/pick_place_press/banana_white_to_blue/lerobot_5hz",
+    #                         i,14)
 
-    for i in tqdm(range(0, 20)):
-        convert_30hz_to_5hz("/data/ghkim/press_the_button_half/press the green button/lerobot",
-                            "/data/ghkim/press_the_button_half/press the green button/lerobot_5hz",
-                            i,1)
+    for i in tqdm(range(0, 50)):
+        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot",
+                            "/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot_5hz",
+                            i, 6)
 
-    for i in tqdm(range(0, 20)):
-        convert_30hz_to_5hz("/data/ghkim/press_the_button_half/press the red button/lerobot",
-                            "/data/ghkim/press_the_button_half/press the red button/lerobot_5hz",
-                            i,0)
+    for i in tqdm(range(0, 50)):
+        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot",
+                            "/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot_5hz",
+                            i,7)
+
+    for i in tqdm(range(0, 50)):
+        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot",
+                            "/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot_5hz",
+                            i,8)
+
+    for i in tqdm(range(0, 50)):
+        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot",
+                            "/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot_5hz",
+                            i, 9)
 
     # convert_30hz_to_5hz("/data/piper_open_the_pot_0804_ep120/lerobot", "/data/piper_open_the_pot_0804_ep120/lerobot_5hz", 119)
     # for i in tqdm(range(200,1200)):

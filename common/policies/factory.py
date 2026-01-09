@@ -24,18 +24,13 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, MixedPrecis
 
 from common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from common.datasets.utils import dataset_to_policy_features
-from common.policies.lora_ada import LoraADAConfig
 from common.policies.pi0.configuration_pi0 import PI0Config
 from common.policies.pretrained import PreTrainedPolicy
 from common.policies.smolvla.configuration_smolvla import SmolVLAConfig
-from common.utils.adapter_utils import inject_adapters, load_adapters_as_expert, load_adapters_as_moe, load_adapters
 from configs.policies import PreTrainedConfig
 from configs.types import FeatureType
 from common.policies.extensions import ExtendedConfig
 
-from common.policies.lora import LoraConfig
-from common.policies.lora_moe import LoraMoEConfig
-from common.policies.lora_msp import LoraMSPConfig
 from common.policies.adalora import AdaLoraConfig
 from common.utils.model_utils import freeze_non_adapters
 
@@ -47,6 +42,11 @@ def get_policy_class(name: str) -> PreTrainedPolicy:
         from common.policies.pi0.modeling_pi0 import PI0Policy
 
         return PI0Policy
+
+    if name == "pi0_pcmb":
+        from common.policies.pi0_pcmb.modeling_pi0 import PI0_PCMB_Policy
+
+        return PI0_PCMB_Policy
 
     elif name == "smolvla":
         from common.policies.smolvla.modeling_smolvla import SmolVLAPolicy
@@ -137,7 +137,7 @@ def _get_lora_cfg_obj(
     method: str,
     is_master: bool,
     device: str | torch.device = "cpu",
-) -> Tuple[PreTrainedPolicy | nn.Module, bool, Optional[LoraConfig]]:
+) -> Tuple[PreTrainedPolicy | nn.Module, bool]:
     train_router_loss = False
     lora_cfg_obj = None
 
@@ -152,52 +152,6 @@ def _get_lora_cfg_obj(
         policy = policy.to(device=device)
         if is_master:
             logging.info("Unfreezed action output projection")
-
-    elif method == "lora":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_moe_cfg") else LoraConfig()
-        if is_master:
-            logging.info("Injected LoRA modules")
-
-    elif method == "qlora":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_moe_cfg") else LoraConfig()
-        lora_cfg_obj.quantize = True
-        if is_master:
-            logging.info("Injected QLoRA modules")
-
-    elif method == "lora_moe":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else LoraMoEConfig()
-        train_router_loss = True
-
-        if is_master:
-            logging.info("Injected LoRA-MoE modules")
-
-    elif method == "qlora_moe":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else LoraMoEConfig()
-        lora_cfg_obj.quantize = True
-        train_router_loss = True
-
-        if is_master:
-            logging.info("Injected QLoRA-MoE modules")
-
-    elif method =="lora_msp":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else LoraMSPConfig()
-        train_router_loss = True
-
-        if is_master:
-            logging.info("Injected LoRA-MSP modules")
-
-    elif method == "lora_ada":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else LoraADAConfig()
-
-        if is_master:
-            logging.info("Injected LoRA-ADA modules")
-
-    elif method == "qlora_ada":
-        lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else LoraADAConfig()
-        lora_cfg_obj.quantize = True
-
-        if is_master:
-            logging.info("Injected QLoRA-ADA modules")
 
     elif method == "adalora":
         lora_cfg_obj = cfg.lora_cfg if hasattr(cfg, "lora_cfg") else AdaLoraConfig()
@@ -234,30 +188,18 @@ def wrap_policy(
     policy, train_router_loss, lora_cfg_obj = _get_lora_cfg_obj(policy, cfg, method, is_master, device)
 
     if lora_cfg_obj is not None:
-        policy, _ = inject_adapters(policy, lora_cfg_obj, target_keywords=cfg.target_keywords)
         policy = policy.to(device=device)
         freeze_non_adapters(policy)
         policy.train_aux_loss = True
 
     if cfg.is_train:
-        if cfg.adapter_file_path:
-            if cfg.expert_source == 'lora':
-                assert lora_cfg_obj.num_experts == len(cfg.adapter_file_path)
-                res = load_adapters_as_expert(policy, cfg.adapter_file_path)
-            elif cfg.expert_source == 'lora_moe':
-                assert len(cfg.adapter_file_path) == 1
-                res = load_adapters_as_moe(policy, cfg.adapter_file_path)
-        else:
-            res = f"Not Injecting Adapters"
+        res = f"Not Injecting Adapters"
 
         if train_router_loss:
             policy.enable_router_loss()
 
     else:
-        if cfg.adapter_file_path:
-            res, policy = load_adapters(policy, cfg.adapter_file_path[0])
-        else:
-            raise Exception(f"No adapter_file_path provided")
+        raise Exception(f"No adapter_file_path provided")
 
 
     return policy, res

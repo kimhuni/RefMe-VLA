@@ -13,4 +13,5 @@
 # limitations under the License.
 
 from .pi0.configuration_pi0 import PI0Config as PI0Config
+from .pi0_pcmb.configuration_pi0 import PI0Config as PI0Config
 from .smolvla.configuration_smolvla import SmolVLAConfig as SmolVLAConfig

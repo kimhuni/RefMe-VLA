@@ -1,14 +1,11 @@
 {
   "task_id": "press_blue_button_2+1",
-
   "inter": 1,
   "intra": [2, 1],
-
   "task_text": [
     "press the blue button two times",
     "press the blue button three times in total"
   ],
-
   "episode_filters": [
     [
       { "tasks": "press the blue button" },
@@ -18,9 +15,17 @@
       { "tasks": "press the blue button" }
     ]
   ],
-
   "llp_commands": "press the blue button\ndone",
-
+  "event_list": "blue button pressed\ndone",
+  "event_grid": [
+    [
+      "blue button pressed",
+      "blue button pressed"
+    ],
+    [
+      "blue button pressed"
+    ]
+  ],
   "memory_grid": [
     [
       {
@@ -36,19 +41,19 @@
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Total: 2"
+        "Episodic_Context": "Previous_Count: 2"
       }
     ],
     [
       {
         "Action_Command": "press the blue button",
         "Working_Memory": "Count: 2 (Goal: 3)",
-        "Episodic_Context": "Previous_Total: 2"
+        "Episodic_Context": "Previous_Count: 2"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Total: 3"
+        "Episodic_Context": "Previous_Count: 3"
       }
     ]
   ]

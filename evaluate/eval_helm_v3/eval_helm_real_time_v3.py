@@ -16,7 +16,7 @@ from peft import PeftModel
 import matplotlib.pyplot as plt
 
 """
-python evaluate/eval_helm_v3/eval_helm_real_time_v3.py \
+python evaluate/eval_helm_v3/eval_helm_real_time_v4.py \
   --base_model /home/minji/Desktop/data/ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /home/minji/Desktop/data/finetuned_model/ghkim/HLP/HeLM_v3/push_the_button_N_times/checkpoint-3200
 """

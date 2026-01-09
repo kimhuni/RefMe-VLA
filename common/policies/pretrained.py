@@ -30,11 +30,9 @@ from transformers import PreTrainedModel as HFPreTrainedModel
 
 from common.constants import OBS_ROBOT, ACTION
 from common.policies.extensions import ExtendedConfig
-from common.policies.lora_msp import LoraMSPLinear
 from common.utils.hub import HubMixin
 from common.utils.model_utils import *
 from common.utils.model_utils import resize_with_pad
-from common.utils.moe_utils import compute_router_loss
 from configs.policies import PreTrainedConfig
 
 T = TypeVar("T", bound="PreTrainedPolicy")
@@ -177,7 +175,6 @@ class PreTrainedPolicy(HubMixin, HFPreTrainedModel, abc.ABC):
             batch: dict[str, Tensor],
             noise=None,
             time=None,
-            method: Optional[ExtendedConfig] = None,
     ) -> tuple[Tensor, dict[str, Tensor]]:
         if self.config.adapt_to_pi_aloha:
             batch[OBS_ROBOT] = self._pi_aloha_decode_state(batch[OBS_ROBOT])
@@ -210,15 +207,7 @@ class PreTrainedPolicy(HubMixin, HFPreTrainedModel, abc.ABC):
         # For logging
         loss_dict["l2_loss"] = loss.item()
 
-        if self._compute_router_loss:
-            assert self.train_aux_loss
-            aux_loss, loss_dict = self._router_forward(method.aux_loss_cfg, loss_dict)
-        # elif method.core == "lora_ada":
-        #     aux_loss = self._compute_orth_regu(regu_weight=0.01)
-        else:
-            aux_loss = torch.tensor(0.0, device=loss.device, dtype=loss.dtype)
-
-        total_loss = loss+aux_loss
+        total_loss = loss
 
         return total_loss, loss_dict
 
@@ -227,22 +216,8 @@ class PreTrainedPolicy(HubMixin, HFPreTrainedModel, abc.ABC):
             aux_loss_cfg: dict,
             loss_dict: dict,
     ):
-        lb_coeff = aux_loss_cfg.get("lb_coeff", 0.01)
-        z_coeff = aux_loss_cfg.get("z_coeff", 1e-3)
-        spec_coeff = aux_loss_cfg.get("spec_coeff", 0.0)
-        mod_coeff = aux_loss_cfg.get("mod_coeff", 0.0)
-        id_coeff = aux_loss_cfg.get("id_coeff", 0.0)
-
-        lb_loss, z_loss, spec_loss, mod_loss, id_loss = compute_router_loss(self)
-
-        aux_loss = lb_coeff * lb_loss + z_coeff * z_loss + spec_coeff * spec_loss + mod_coeff * mod_loss + id_coeff * id_loss
-
-        loss_dict["router_balance_loss"] = lb_loss.item()
-        loss_dict["router_z_loss"] = z_loss.item()
-        loss_dict["router_spec_loss"] = spec_loss.item()
-        loss_dict["router_mod_loss"] = mod_loss.item()
-        loss_dict["router_id_loss"] = id_loss.item()
-        loss_dict["moe_aux_loss"] = aux_loss.item()
+        aux_loss = None
+        loss_dict = None
 
         return aux_loss, loss_dict
 
@@ -383,9 +358,6 @@ class PreTrainedPolicy(HubMixin, HFPreTrainedModel, abc.ABC):
 
     def get_k_distribution(self):
         dist = {}
-        for n, m in self.named_modules():
-            if isinstance(m, LoraMSPLinear) and hasattr(m, "top_k"):
-                dist[n] = m.top_k
         return dist
 
 
