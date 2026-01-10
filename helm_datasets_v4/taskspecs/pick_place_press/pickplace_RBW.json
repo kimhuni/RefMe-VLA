@@ -2,64 +2,42 @@
   "task_id": "pickplace_RBW",
 
   "inter": 0,
-  "intra": [4, 0],
+  "intra": [3],
 
   "task_text": [
-    "pick up the banana from the red plate and place it on the white plate. pick up the banana from the blue plate and place it on the white plate. press the orange button between pick and place task"
+    "pick and place the banana from the red plate to the white plate, then from the blue plate to the white plate, pressing the orange button in between\n"
   ],
 
   "episode_filters": [
     [
-      { "tasks": "press the blue button" },
-      { "tasks": "press the blue button" }
-    ],
-    [
-      { "tasks": "press the blue button" },
-      { "tasks": "press the blue button" },
-      { "tasks": "press the blue button" }
+      { "tasks": "pick up the banana from the red plate and place it on the blue plate" },
+      { "tasks": "press the orange button" },
+      { "tasks": "pick up the banana from the blue plate and place it on the white plate" }
     ]
   ],
 
-  "llp_commands": "press the blue button\ndone",
-
+  "llp_commands": "pick up the banana from the blue plate and place it on the red plate\npick up the banana from the blue plate and place it on the white plate\npick up the banana from the red plate and place it on the blue plate\npick up the banana from the red plate and place it on the white plate\npick up the banana from the white plate and place it on the blue plate\npick up the banana from the white plate and place it on the red plate\npress the orange button",
   "memory_grid": [
     [
       {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 0 (Goal: 2)",
+        "Action_Command": "pick up the banana from the red plate and place it on the white plate",
+        "Working_Memory": "Progress: none (Goal: red_to_white, press_orange, blue_to_white)",
         "Episodic_Context": "None"
       },
       {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 1 (Goal: 2)",
+        "Action_Command": "press the orange button",
+        "Working_Memory": "Progress: red_to_white (Goal: red_to_white, press_orange, blue_to_white)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "pick up the banana from the blue plate and place it on the white plate",
+        "Working_Memory": "Progress: red_to_white, press_orange (Goal: red_to_white, press_orange, blue_to_white)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Total: 2"
-      }
-    ],
-    [
-      {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 2 (Goal: 5)",
-        "Episodic_Context": "Previous_Total: 2"
-      },
-      {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 3 (Goal: 5)",
-        "Episodic_Context": "Previous_Total: 2"
-      },
-      {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 4 (Goal: 5)",
-        "Episodic_Context": "Previous_Total: 2"
-      },
-      {
-        "Action_Command": "done",
-        "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Total: 5"
+        "Episodic_Context": "Previous_Progress: red_to_white, press_orange, blue_to_white"
       }
     ]
   ]

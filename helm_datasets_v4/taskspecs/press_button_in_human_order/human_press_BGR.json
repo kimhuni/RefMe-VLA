@@ -1,0 +1,81 @@
+{
+  "task_id": "human_press_BGR",
+  "inter": 1,
+  "intra": [3,3],
+  "task_text": [
+    "observe the sequence of buttons pressed by the person",
+    "press the buttons in the same order as observed before"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "human press the blue button" },
+      { "tasks": "human press the green button" },
+      { "tasks": "human press the red button" }
+    ],
+    [
+      { "tasks": "press the blue button" },
+      { "tasks": "press the green button" },
+      { "tasks": "press the red button" }
+    ]
+  ],
+  "llp_commands": "wait\npress the blue button\npress the green button\npress the red button\ndone",
+  "event_list": "blue button pressed\ngreen button pressed\nred button pressed\ndone",
+  "event_grid": [
+    [
+      "blue button pressed",
+      "green button pressed",
+      "red button pressed"
+    ],
+    [
+      "blue button pressed",
+      "green button pressed",
+      "red button pressed"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "wait",
+        "Working_Memory": "Progress: none (Goal: observe)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "wait",
+        "Working_Memory": "Progress: blue (Goal: observe)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "wait",
+        "Working_Memory": "Progress: blue, green (Goal: observe)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: blue, green, red"
+      }
+    ],
+    [
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Progress: none (Goal: blue, green, red)",
+        "Episodic_Context": "Previous_Progress: blue, green, red"
+      },
+      {
+        "Action_Command": "press the green button",
+        "Working_Memory": "Progress: blue (Goal: blue, green, red)",
+        "Episodic_Context": "Previous_Progress: blue, green, red"
+      },
+      {
+        "Action_Command": "press the red button",
+        "Working_Memory": "Progress: blue, green (Goal: blue, green, red)",
+        "Episodic_Context": "Previous_Progress: blue, green, red"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: blue, green, red"
+      }
+    ]
+  ]
+}
