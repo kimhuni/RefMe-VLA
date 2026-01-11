@@ -16,4 +16,13 @@ TASKS_DICT = {
         '14' : "pick up the banana from the white plate and place it on the blue plate",
         '15' : "pick up the banana from the white plate and place it on the red plate",
         '16' : "press the orange button",
+        '20' : "press the blue button one time",
+        '21' : "press the blue button two times",
+        '22' : "press the blue button three times",
+        '23' : "press the blue, green, red buttons in order",
+        '24' : "press the blue, red, green buttons in order",
+        '25' : "press the green, blue, red buttons in order",
+        '26' : "press the green, red, blue buttons in order",
+        '27' : "press the red, blue, green buttons in order",
+        '28' : "press the red, green, blue buttons in order",
     }
