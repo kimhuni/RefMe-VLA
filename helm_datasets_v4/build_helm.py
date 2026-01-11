@@ -136,10 +136,10 @@ def build_detect_rows_for_episode_step(
         gt_text = dump_yaml(gt_yaml)
 
         images = {
-            "table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))
+            "table": str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "table", frame_id))
         }
         if n_images == 2:
-            images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+            images["wrist"] = str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
 
         rows.append({
             "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "detect", inter_idx, step_idx, frame_id),
@@ -218,9 +218,9 @@ def build_update_rows_for_episode_step(
             )
             gt = dump_yaml(curr_mem)
 
-            images = {"table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
+            images = {"table": str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
             if n_images == 2:
-                images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+                images["wrist"] = str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
 
             rows.append({
                 "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "init", inter_idx, step_idx, frame_id),
@@ -258,9 +258,9 @@ def build_update_rows_for_episode_step(
             )
             gt = dump_yaml(curr_mem)
 
-            images = {"table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
+            images = {"table": str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
             if n_images == 2:
-                images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+                images["wrist"] = str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
 
             rows.append({
                 "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "transition", inter_idx, step_idx, frame_id),
@@ -302,9 +302,9 @@ def build_update_rows_for_episode_step(
 
     # event_frame_ids가 비어있으면 update를 만들 수 없음 (event 복제 정책이므로)
     for frame_id in ep.event_frame_ids:
-        images = {"table": str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
+        images = {"table": str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "table", frame_id))}
         if n_images == 2:
-            images["wrist"] = str(frame_path(out_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
+            images["wrist"] = str(frame_path(data_root, fps_out, ep.chunk, ep.episode, "wrist", frame_id))
 
         rows.append({
             "uid": make_uid(spec.task_id, ep.chunk, ep.episode, split, "update", inter_idx, step_idx, frame_id),
