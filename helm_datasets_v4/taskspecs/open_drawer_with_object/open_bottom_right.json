@@ -1,0 +1,54 @@
+{
+  "task_id": "open_bottom_right",
+  "inter": 1,
+  "intra": [1, 1],
+  "task_text": [
+    "observe in which drawer the hamburger is located",
+    "find the drawer with hamburger"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "observe hamburger location: bottom right drawer" }
+    ],
+    [
+      { "tasks": "open the bottom right drawer" }
+    ]
+  ],
+  "llp_commands": "wait\nopen the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
+  "event_list": "hamburger located at bottom left drawer\nhamburger located at bottom right drawer\nhamburger located at top left drawer\nhamburger located at top right drawer\nbottom left drawer opened\nbottom right drawer opened\ntop left drawer opened\ntop right drawer opened\ndone",
+  "event_grid": [
+    [
+      "hamburger located at bottom right drawer"
+    ],
+    [
+      "bottom right drawer opened"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "wait",
+        "Working_Memory": "Progress: none (Goal: observe)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: bottom_right"
+      }
+    ],
+    [
+      {
+        "Action_Command": "open the bottom right drawer",
+        "Working_Memory": "Progress: none (Goal: bottom_right)",
+        "Episodic_Context": "Previous_Progress: bottom_right"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: bottom_right"
+      }
+    ]
+  ]
+}
+

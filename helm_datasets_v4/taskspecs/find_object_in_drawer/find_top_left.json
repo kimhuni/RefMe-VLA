@@ -1,0 +1,35 @@
+{
+  "task_id": "find_top_left",
+  "inter": 0,
+  "intra": [1],
+  "task_text": [
+    "open the drawers in the following order to find the hamburger, and stop when you find it: top left, top right, bottom right, bottom left"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "open the top left drawer with hamburger" }
+    ]
+  ],
+  "llp_commands": "open the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
+  "event_list": "nothing at the current drawer\nhamburger located at bottom left drawer\nhamburger located at bottom right drawer\nhamburger located at top left drawer\nhamburger located at top right drawer\ndone",
+  "event_grid": [
+    [
+      "hamburger located at top left drawer"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "open the top left drawer",
+        "Working_Memory": "Progress: none (Goal: top_left, top_right, bottom_right, bottom_left)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: top_left"
+      }
+    ]
+  ]
+}
+

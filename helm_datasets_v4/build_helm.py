@@ -334,6 +334,7 @@ def build_update_rows_for_episode_step(
 
 def build_for_task(
     spec: TaskSpecV4,
+    data_root: Path,
     out_root: Path,
     fps_out: int,
     n_images: int,
@@ -343,14 +344,14 @@ def build_for_task(
     taskspecs_dir: Path,
 ) -> None:
     # 전체 episode 목록
-    all_pairs = iter_all_episodes(out_root, fps_out=fps_out)
+    all_pairs = iter_all_episodes(data_root, fps_out=fps_out)
     train_pairs, val_pairs = split_episodes(all_pairs, val_ratio=val_ratio, seed=seed)
 
     # split 별 에피소드 로딩 캐시 (필요시)
     def load_pairs(pairs: List[tuple[str, str]]) -> List[DataEpisodeV4]:
         episodes: List[DataEpisodeV4] = []
         for chunk, episode in pairs:
-            ep = load_data_episode(out_root, fps_out, chunk, episode, use_wrist=(n_images == 2))
+            ep = load_data_episode(data_root, fps_out, chunk, episode, use_wrist=(n_images == 2))
             episodes.append(ep)
         return episodes
 
@@ -436,6 +437,7 @@ def build_for_task(
 
 def main() -> None:
     p = argparse.ArgumentParser()
+    p.add_argument("--data_root", type=str, required=True)
     p.add_argument("--out_root", type=str, required=True)
     p.add_argument("--taskspecs_dir", type=str, required=True)
     p.add_argument("--tasks", type=str, nargs="*", default=None, help="optional task_id list. if omitted, build ALL tasks in taskspecs_dir")
@@ -446,6 +448,7 @@ def main() -> None:
     p.add_argument("--shard_size", type=int, default=5000)
     args = p.parse_args()
 
+    data_root = Path(args.data_root)
     out_root = Path(args.out_root)
     taskspecs_dir = Path(args.taskspecs_dir)
 
@@ -460,6 +463,7 @@ def main() -> None:
 
         build_for_task(
             specs[task_id],
+            data_root=data_root,
             out_root=out_root,
             fps_out=args.fps_out,
             n_images=args.n_images,

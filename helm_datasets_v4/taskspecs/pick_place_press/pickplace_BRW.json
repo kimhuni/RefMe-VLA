@@ -1,0 +1,48 @@
+{
+  "task_id": "pickplace_BRW",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "pick and place the banana from the blue plate to the red plate, then from the red plate to the white plate, pressing the orange button in between"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "pick up the banana from the blue plate and place it on the red plate" },
+      { "tasks": "press the orange button" },
+      { "tasks": "pick up the banana from the red plate and place it on the white plate" }
+    ]
+  ],
+  "llp_commands": "pick up the banana from the blue plate and place it on the red plate\npick up the banana from the blue plate and place it on the white plate\npick up the banana from the red plate and place it on the blue plate\npick up the banana from the red plate and place it on the white plate\npick up the banana from the white plate and place it on the blue plate\npick up the banana from the white plate and place it on the red plate\npress the orange button\ndone",
+  "event_list": "banana moved blue to red\norange button pressed\nbanana moved red to white\ndone",
+  "event_grid": [
+    [
+      "banana moved blue to red",
+      "orange button pressed",
+      "banana moved red to white"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "pick up the banana from the blue plate and place it on the red plate",
+        "Working_Memory": "Progress: none (Goal: blue_to_red, press_orange, red_to_white)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the orange button",
+        "Working_Memory": "Progress: blue_to_red (Goal: blue_to_red, press_orange, red_to_white)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "pick up the banana from the red plate and place it on the white plate",
+        "Working_Memory": "Progress: blue_to_red, press_orange (Goal: blue_to_red, press_orange, red_to_white)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: blue_to_red, press_orange, red_to_white"
+      }
+    ]
+  ]
+}
