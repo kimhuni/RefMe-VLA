@@ -99,6 +99,7 @@ def build_detect_rows_for_episode_step(
     spec: TaskSpecV4,
     ep: DataEpisodeV4,
     out_root: Path,
+    data_root: Path,
     fps_out: int,
     n_images: int,
     split: str,
@@ -180,6 +181,7 @@ def build_update_rows_for_episode_step(
     spec: TaskSpecV4,
     ep: DataEpisodeV4,
     out_root: Path,
+    data_root: Path,
     fps_out: int,
     n_images: int,
     split: str,
@@ -334,8 +336,8 @@ def build_update_rows_for_episode_step(
 
 def build_for_task(
     spec: TaskSpecV4,
-    data_root: Path,
     out_root: Path,
+    data_root: Path,
     fps_out: int,
     n_images: int,
     val_ratio: float,
@@ -382,6 +384,7 @@ def build_for_task(
                         spec=spec,
                         ep=ep,
                         out_root=out_root,
+                        data_root=data_root,
                         fps_out=fps_out,
                         n_images=n_images,
                         split=split_name,
@@ -410,7 +413,7 @@ def build_for_task(
                     if not episode_matches_filter(ep.meta, flt):
                         continue
                     out_rows.extend(build_update_rows_for_episode_step(
-                        spec, ep, out_root, fps_out, n_images, split_name,
+                        spec, ep, out_root, data_root, fps_out, n_images, split_name,
                         inter_idx=inter_idx, step_idx=step_idx,
                         make_transition_in_step0=True,   # 고정(나중에 argparse 옵션화)
                     ))
@@ -463,8 +466,8 @@ def main() -> None:
 
         build_for_task(
             specs[task_id],
-            data_root=data_root,
             out_root=out_root,
+            data_root=data_root,
             fps_out=args.fps_out,
             n_images=args.n_images,
             val_ratio=args.val_ratio,
