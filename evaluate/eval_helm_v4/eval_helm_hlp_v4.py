@@ -29,12 +29,12 @@ from peft import PeftModel
 logger = logging.getLogger("eval_helm_v3")
 
 """
-CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
-  --jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v3/merged/all_val.jsonl \
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_v4/eval_helm_hlp_v4.py \
+  --jsonl /data/ghkim/helm_data/helm_v4_task_8/jsonl_v4/merged_7/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter /result/ghkim/HLP_HeLM_press_button_N_times_M_times_total_2240_0103/checkpoint-4400 \
-  --max_samples 200 --seed 123 \
-  --out_jsonl /data/ghkim/helm_data/result/press_button_N_times_M_times_total/eval_preds_4400.jsonl
+  --adapter /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_test_0111/checkpoint-3400 \
+  --max_samples 500 --seed 123 \
+  --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v4_qwen_7b_all_test_0111/eval_step_3400.jsonl
   
 CUDA_VISIBLE_DEVICES=2 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
   --jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \

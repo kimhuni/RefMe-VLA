@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader, Subset
 from transformers import (
     Qwen2_5_VLForConditionalGeneration,
@@ -28,6 +29,22 @@ from train.train_helm_v4.helm_dataset import (
 
 """
 export PYTHONPATH=$(pwd)
+# DDP Train #
+CUDA_VISIBLE_DEVICES=6,7
+    torchrun --nproc_per_node=2 train/train_helm_v4/train_helm.py \
+        --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+        --train_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_train.jsonl \
+        --val_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_val.jsonl \
+        --num_images 1 \
+        --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_DDP_0113 \
+        --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
+        --num_train_epochs 3 \
+        --with_replacement True \
+        --attn_impl sdpa \
+        --eval_max_samples 40 \
+        --wandb_project RefMe \
+        --wandb_run_name HLP_HeLM_v4_qwen_7b_all_DDP_0113
+  
 # Qwen 3b model test #
 CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-3B-Instruct \
@@ -44,19 +61,19 @@ CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --wandb_run_name HLP_HeLM_v4_qwen_3b_press_button_N_times
 
 # Qwen 7b mode
-CUDA_VISIBLE_DEVICES=4 python train/train_helm_v4/train_helm.py \
+CUDA_VISIBLE_DEVICES=6 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v4/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/press_button_N_times_M_times_total/jsonl_v4/merged/all_val.jsonl \
+  --train_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_val.jsonl \
   --num_images 1 \
-  --output_dir /result/ghkim/HLP_HeLM_v4_qwen_7b_press_button_N_times_M_times_total \
+  --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0113 \
   --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
-  --num_train_epochs 10 \
+  --num_train_epochs 3 \
   --with_replacement True \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v4_qwen_7b_press_button_N_times_M_times_total
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0113
   
 CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
@@ -136,13 +153,18 @@ class MixedBatchSampler:
                 raise ValueError(f"pool '{k}' is empty but per_batch[{k}]={n}")
 
     def __len__(self):
-        return self.steps_per_epoch
+        # DDP일 때 rank당 steps 수로 줄여서 Trainer epoch 길이가 맞게 함
+        world = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+        return (self.steps_per_epoch + world - 1) // world
 
     def __iter__(self):
         rng = random.Random(self.seed)
 
+        rank = dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
+        world = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+
         if self.with_replacement:
-            for _ in range(self.steps_per_epoch):
+            for step in range(self.steps_per_epoch):
                 batch: List[int] = []
                 for k, n in self.per_batch.items():
                     if n == 0:
@@ -150,14 +172,11 @@ class MixedBatchSampler:
                     batch.extend(rng.choices(self.pools[k], k=n))
                 if self.shuffle_within_batch:
                     rng.shuffle(batch)
-                yield batch
-        else:
-            # no replacement: shuffle pools and consume
-            working = {k: list(v) for k, v in self.pools.items()}
-            for k in working:
-                rng.shuffle(working[k])
 
-            for _ in range(self.steps_per_epoch):
+                if (step % world) == rank:
+                    yield batch
+        else:
+            for step in range(self.steps_per_epoch):
                 batch: List[int] = []
                 for k, n in self.per_batch.items():
                     if n == 0:
@@ -168,7 +187,9 @@ class MixedBatchSampler:
                     del working[k][:n]
                 if self.shuffle_within_batch:
                     rng.shuffle(batch)
-                yield batch
+
+                if (step % world) == rank:
+                    yield batch
 
 
 # ---------------------------
@@ -400,6 +421,7 @@ def main():
         bf16=bool(args.bf16),
         report_to=["wandb"],
         remove_unused_columns=False,
+        ddp_find_unused_parameters=False,
     )
 
     print_label_stats(args.train_jsonl)

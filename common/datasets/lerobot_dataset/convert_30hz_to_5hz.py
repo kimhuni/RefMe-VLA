@@ -110,25 +110,25 @@ if __name__ == "__main__":
     #                         "/data/ghkim/pick_place_press/banana_white_to_blue/lerobot_5hz",
     #                         i,14)
 
-    for i in tqdm(range(0, 50)):
-        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot",
-                            "/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot_5hz",
-                            i, 6)
+    for i in tqdm(range(0, 10)):
+        convert_30hz_to_5hz("/data/ghkim/data_hub/open_empty_drawer_ep40/open_leftdown_drawer_empty/lerobot",
+                            "/data/ghkim/data_hub/open_empty_drawer_ep40/open_leftdown_drawer_empty/lerobot_5hz",
+                            i, 30)
 
-    for i in tqdm(range(0, 50)):
-        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot",
-                            "/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot_5hz",
-                            i,7)
+    for i in tqdm(range(0, 10)):
+        convert_30hz_to_5hz("/data/ghkim/data_hub/open_empty_drawer_ep40/open_leftup_drawer_empty/lerobot",
+                            "/data/ghkim/data_hub/open_empty_drawer_ep40/open_leftup_drawer_empty/lerobot_5hz",
+                            i,31)
 
-    for i in tqdm(range(0, 50)):
-        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot",
-                            "/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot_5hz",
-                            i,8)
+    for i in tqdm(range(0, 10)):
+        convert_30hz_to_5hz("/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightdown_drawer_empty/lerobot",
+                            "/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightdown_drawer_empty/lerobot_5hz",
+                            i,32)
 
-    for i in tqdm(range(0, 50)):
-        convert_30hz_to_5hz("/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot",
-                            "/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot_5hz",
-                            i, 9)
+    for i in tqdm(range(0, 10)):
+        convert_30hz_to_5hz("/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightup_drawer_empty/lerobot",
+                             "/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightup_drawer_empty/lerobot_5hz",
+                            i, 33)
 
     # convert_30hz_to_5hz("/data/piper_open_the_pot_0804_ep120/lerobot", "/data/piper_open_the_pot_0804_ep120/lerobot_5hz", 119)
     # for i in tqdm(range(200,1200)):

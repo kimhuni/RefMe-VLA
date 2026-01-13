@@ -24,8 +24,8 @@ from transformers import AutoTokenizer
 
 from common.constants import ACTION, OBS_ROBOT
 from common.policies.normalize import Normalize, Unnormalize
-from common.policies.pi0.configuration_pi0 import PI0Config
-from common.policies.pi0.paligemma_with_expert import (
+from common.policies.pi0_pcmb.configuration_pi0 import PI0Config
+from common.policies.pi0_pcmb.paligemma_with_expert import (
     PaliGemmaWithExpertConfig,
     PaliGemmaWithExpertModel,
 )
@@ -107,10 +107,43 @@ class PI0_PCMB_Policy(PreTrainedPolicy):
             self.model.action_in_proj,
             self.model.action_out_proj,
             self.model.action_time_mlp_in,
-            self.model.action_time_mlp_out,
+            self.model.action_time_mlp_out,self.model.mem_adapter,
         ]
 
+    def forward(self, batch: dict[str, Tensor], method=None):
+        # 1) episode/timestep meta 추출 (키 이름은 네 dataset에 맞춰 유지)
+        ep_ids = batch.get("episode_index", None) or batch.get("episode_ids", None)
+        ts = batch.get("frame_index", None) or batch.get("timestep", None)
 
+        # episode change -> reset
+        if ep_ids is not None:
+            ep0 = int(ep_ids[0].item()) if hasattr(ep_ids[0], "item") else int(ep_ids[0])
+            if getattr(self, "_prev_ep0", None) != ep0:
+                self.model.pcmb.reset()
+                self._prev_ep0 = ep0
+
+        # 3) 모델에 meta “주입”
+        self.model.set_pcmb_meta(ep_ids, ts)
+
+        # 4) 원래 PreTrainedPolicy.forward 로직 그대로 사용
+        loss, out = super().forward(batch)
+
+        #######################################################################################################
+        ep_ids = batch.get("episode_index") or batch.get("episode_ids")
+        ts = batch.get("frame_index") or batch.get("timestep")
+
+        self.model.set_pcmb_meta(ep_ids, ts)
+
+        print("[PCMB META] ep_ids:", None if ep_ids is None else (int(ep_ids.min()), int(ep_ids.max())))
+        print("[PCMB META] ts:", None if ts is None else (int(ts.min()), int(ts.max())))
+        #######################################################################################################
+
+        return loss, out
+
+    def reset(self):
+        self._action_queue = deque([], maxlen=self.config.n_action_steps)
+        self.model.pcmb.reset()
+        self._prev_ep0 = None
 
     # ---------------------------------------------------------
     # Component-wise norm helpers (vision, language, action generator)
@@ -290,6 +323,14 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         )
         self.paligemma_with_expert = PaliGemmaWithExpertModel(paligemma_with_export_config)
 
+        # PCMB configs
+        hidden_dim = 2048  # PCMB/mem_ctx dim (prefix hidden)
+        self.pcmb = PCMB(d=hidden_dim, max_len=config.memory_len)
+
+        # action_out dim = proj_width = 1024 로 주입해야 함
+        self.mem_adapter = nn.Linear(hidden_dim, self.config.proj_width, bias=False)  # 2048 -> 1024 (O)
+        self.mem_scale = 0.1
+
         # Projections are float32
         self.state_proj = nn.Linear(self.config.max_state_dim, self.config.proj_width)
         self.action_in_proj = nn.Linear(self.config.max_action_dim, self.config.proj_width)
@@ -301,6 +342,10 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         self.set_requires_grad()
 
         self.sample_dtype = self.state_proj.weight.dtype
+
+    def set_pcmb_meta(self, episode_ids=None, timesteps=None):
+        self._pcmb_episode_ids = episode_ids
+        self._pcmb_timesteps = timesteps
 
     def sample_time(self, bsize, device):
         time_beta = sample_beta(1.5, 1.0, bsize, device)
@@ -444,23 +489,9 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks
+        prefix_embs, prefix_pad_masks, prefix_att_masks, spans = self.embed_prefix(
+            images, img_masks, lang_tokens, lang_masks, return_spans=True
         )
-
-        ################################DEBUG############################################################
-        # spans (네가 준 값으로 고정 가능)
-        N_IMG = 512
-        IMG_S, IMG_E = 0, N_IMG
-        LANG_S, LANG_E = N_IMG, N_IMG + lang_tokens.shape[1]
-        COG_IDX = LANG_E - 1
-
-        per_tokens = prefix_embs[:, IMG_S:IMG_E, :]
-        if (torch.rand(()) < 0.1):  # 너무 많이 찍히지 않게
-            print("[DBG/train] prefix_embs", tuple(prefix_embs.shape))
-            print("[DBG/train] per_tokens ", tuple(per_tokens.shape))
-            print("[DBG/train] idx:", IMG_S, IMG_E, LANG_S, LANG_E, COG_IDX)
-        ##########################################################################################
 
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, time)
 
@@ -479,19 +510,61 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             use_cache=False,
             fill_kv_cache=False,
         )
-        ################################DEBUG############################################################
-        outputs_embeds = (prefix_out, suffix_out) #
-        prefix_out = outputs_embeds[0]  # (B, 560, 2048)
-        cog_token = prefix_out[:, COG_IDX, :]  # (B, 2048)
 
-        if (torch.rand(()) < 0.1):#
-            print("[DBG/train] prefix_out", tuple(prefix_out.shape))#
-            print("[DBG/train] cog_token ", tuple(cog_token.shape))#
-        ################################DEBUG############################################################
-        suffix_out = suffix_out[:, -self.config.n_action_steps :]
-        # Original openpi code, upcast attention output
-        suffix_out = suffix_out.to(dtype=self.state_proj.weight.dtype)
-        v_t = self.action_out_proj(suffix_out)
+        ############################################ [PCMB Module] ############################################
+        # spans["lang_span"] = (LANG_S, LANG_E)
+        LANG_S, LANG_E = spans["lang_span"]
+        N_IMG = LANG_S
+        COG_IDX = LANG_E - 1
+
+        per_tokens = prefix_embs[:, :N_IMG, :]  # (B, N_IMG, 2048)
+        cog_tokens = prefix_out[:, COG_IDX, :]  # (B, 2048)
+
+        action_out = suffix_out[:, -self.config.n_action_steps:, :]  # (B, T, 2048)
+
+        ep = getattr(self, "_pcmb_episode_ids", None)
+        ts = getattr(self, "_pcmb_timesteps", None)
+
+        # DEBUG
+        # after action_out computed
+        if self.mem_adapter.in_features != action_out.shape[-1]:
+            raise RuntimeError(
+                f"mem_adapter expects {self.mem_adapter.in_features} but action_out dim is {action_out.shape[-1]}")
+
+        action_out_list = []
+        for i in range(action_out.shape[0]):  # B를 time처럼 scan
+            # mixed-episode 방어(네 세팅이면 거의 없음)
+            if ep is not None and i > 0:
+                epi = int(ep[i].item())
+                ep_prev = int(ep[i - 1].item())
+                if epi != ep_prev:
+                    self.pcmb.reset()
+
+            ts_i = int(ts[i].item()) if ts is not None else i
+
+            mem_ctx = self.pcmb.step(per_tokens[i], cog_tokens[i], timestep=ts_i)  # (2048,)
+            action_out_i = action_out[i] + self.mem_scale * self.mem_adapter(mem_ctx)[None, :]
+            action_out_list.append(action_out_i)
+
+            assert action_out.shape[-1] == self.action_out_proj.in_features, \
+                (action_out.shape, self.action_out_proj.in_features)
+
+        action_out = torch.stack(action_out_list, dim=0)
+        action_out = action_out.to(dtype=self.state_proj.weight.dtype)
+        v_t = self.action_out_proj(action_out)
+        #######################################################################################################
+        print("prefix_embs:", prefix_embs.shape)  # 기대: (B, *, 2048)
+        print("prefix_out :", prefix_out.shape)  # 기대: (B, *, 2048)
+        print("action_out :", action_out.shape)  # 기대: (B, T, 1024)
+        print("mem_ctx    :", mem_ctx.shape)  # 기대: (2048,)
+        print("mem_adapt  :", self.mem_adapter.in_features, "->", self.mem_adapter.out_features)  # 2048->1024
+        #######################################################################################################
+
+
+        # suffix_out = suffix_out[:, -self.config.n_action_steps :]
+        # # Original openpi code, upcast attention output
+        # suffix_out = suffix_out.to(dtype=self.state_proj.weight.dtype)
+        # v_t = self.action_out_proj(suffix_out)
 
         losses = F.mse_loss(u_t, v_t, reduction="none")
         return losses
@@ -594,3 +667,40 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         suffix_out = suffix_out.to(dtype=self.state_proj.weight.dtype)
         v_t = self.action_out_proj(suffix_out)
         return v_t
+
+
+class PCMB(nn.Module):
+    def __init__(self, d: int, max_len: int = 16):
+        super().__init__()
+        self.d = d
+        self.max_len = max_len
+        self.reset()
+
+    def reset(self):
+        self.per_bank = []   # list[Tensor] each (d,)
+        self.cog_bank = []   # list[Tensor] each (d,)
+        self.t_bank = []     # list[int]
+
+    def detach_(self):
+        self.per_bank = [x.detach() for x in self.per_bank]
+        self.cog_bank = [x.detach() for x in self.cog_bank]
+
+    def step(self, per: torch.Tensor, cog: torch.Tensor, timestep: int | None = None):
+        # per: (N, d) -> pooled (d,)
+        per_vec = per.mean(dim=0)  # (d,)
+        cog_vec = cog              # (d,)
+
+        # update (detach 저장)
+        self.per_bank.append(per_vec.detach())
+        self.cog_bank.append(cog_vec.detach())
+        self.t_bank.append(int(timestep) if timestep is not None else len(self.t_bank))
+
+        # truncate
+        if len(self.per_bank) > self.max_len:
+            self.per_bank = self.per_bank[-self.max_len:]
+            self.cog_bank = self.cog_bank[-self.max_len:]
+            self.t_bank = self.t_bank[-self.max_len:]
+
+        # retrieve: recent average
+        mem = torch.stack(self.per_bank, dim=0).mean(dim=0) + torch.stack(self.cog_bank, dim=0).mean(dim=0)
+        return mem  # (d,)

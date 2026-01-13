@@ -1,10 +1,10 @@
 {
-  "task_id": "press_blue_button_2+3",
+  "task_id": "press_blue_button_2+2",
   "inter": 1,
-  "intra": [2, 3],
+  "intra": [2, 2],
   "task_text": [
     "press the blue button two times",
-    "press the blue button five times in total"
+    "press the blue button four times in total"
   ],
   "episode_filters": [
     [
@@ -12,7 +12,6 @@
       { "tasks": "press the blue button" }
     ],
     [
-      { "tasks": "press the blue button" },
       { "tasks": "press the blue button" },
       { "tasks": "press the blue button" }
     ]
@@ -25,7 +24,6 @@
       "blue button pressed"
     ],
     [
-      "blue button pressed",
       "blue button pressed",
       "blue button pressed"
     ]
@@ -51,23 +49,18 @@
     [
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 2 (Goal: 5)",
+        "Working_Memory": "Count: 2 (Goal: 4)",
         "Episodic_Context": "Previous_Count: 2"
       },
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 3 (Goal: 5)",
-        "Episodic_Context": "Previous_Count: 2"
-      },
-      {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 4 (Goal: 5)",
+        "Working_Memory": "Count: 3 (Goal: 4)",
         "Episodic_Context": "Previous_Count: 2"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Count: 5"
+        "Episodic_Context": "Previous_Count: 4"
       }
     ]
   ]

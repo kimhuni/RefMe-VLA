@@ -18,13 +18,58 @@ TASK_KEYMAP: Dict[str, Dict[str, str]] = {
         "5": "press_RBG",
         "6": "press_RGB",
     },
+    "wipe_the_window": {
+        "1": "wipe_the_window",
+    },
+    "find_object_in_drawer": {
+        "1": "find_top_left",
+        "2": "find_top_right",
+        "3": "find_bottom_right",
+        "4": "find_bottom_left",
+    },
+    "pick_place_press": {
+        "1": "pickplace_BRW",
+        "2": "pickplace_BWR",
+        "3": "pickplace_RBW",
+        "4": "pickplace_RWB",
+        "5": "pickplace_WBR",
+        "6": "pickplace_WRB",
+    },
     "press_button_N_times_M_times_total": {
         "1": "press_blue_button_1+1",
         "2": "press_blue_button_1+2",
         "3": "press_blue_button_1+3",
+        "4": "press_blue_button_2+1",
+        "5": "press_blue_button_2+2",
+        "6": "press_blue_button_2+3",
+        "7": "press_blue_button_3+1",
+        "8": "press_blue_button_3+2",
+        "9": "press_blue_button_3+3",
     },
-    "wipe_the_window": {
-        "1": "wipe_the_window",
+    "press_button_in_human_order": {
+        "1": "human_press_BGR",
+    },
+    "wipe_the_remainin_window": {
+        "1": "wipe_bottom_middle_remain",
+        "2": "wipe_bottom_remain",
+        "3": "wipe_bottom_top_remain",
+        "4": "wipe_middle_remain",
+        "5": "wipe_middle_top_remain",
+        "6": "wipe_top_remain",
+    },
+    "open_drawer_with_object": {
+        "1": "open_bottom_left",
+        "2": "open_bottom_right",
+        "3": "open_top_left",
+        "4": "open_top_right",
+    },
+    "pick_place_original": {
+        "1": "pickplace_original_BRW",
+        "2": "pickplace_original_BWR",
+        "3": "pickplace_original_RBW",
+        "4": "pickplace_original_RWB",
+        "5": "pickplace_original_WBR",
+        "6": "pickplace_original_WRB",
     },
 }
 

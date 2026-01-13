@@ -457,14 +457,14 @@ def create_meta(root_dir, episodes):
     episode_index_df = []
     task_index_df = []
     # index_df = []
-    observation_images_exo_df = []
+    # observation_images_exo_df = []
     observation_images_wrist_df = []
     observation_images_table_df = []
 
     # fetch data of each episode
     for i in tqdm(range(episodes)):
         parquet_file = os.path.join(root_dir, f"data/chunk-{i//50:03d}/episode_{i:06d}.parquet")
-        exo_file = os.path.join(root_dir, f"videos/chunk-{i//50:03d}/observation.images.exo/episode_{i:06d}.mp4")
+        # exo_file = os.path.join(root_dir, f"videos/chunk-{i//50:03d}/observation.images.exo/episode_{i:06d}.mp4")
         wrist_file = os.path.join(root_dir, f"videos/chunk-{i//50:03d}/observation.images.wrist/episode_{i:06d}.mp4")
         table_file = os.path.join(root_dir, f"videos/chunk-{i//50:03d}/observation.images.table/episode_{i:06d}.mp4")
 
@@ -476,7 +476,7 @@ def create_meta(root_dir, episodes):
         })
 
         total_frames += len(parquet_data)
-        exo_cap = cv2.VideoCapture(exo_file)
+        # exo_cap = cv2.VideoCapture(exo_file)
         wrist_cap = cv2.VideoCapture(wrist_file)
         table_cap = cv2.VideoCapture(table_file)
 
@@ -493,11 +493,11 @@ def create_meta(root_dir, episodes):
             task_index_df.append(frame_data['task_index'])
             # index_df.append(frame_data['index'])
 
-            _, exo_frame = exo_cap.read()
+            # _, exo_frame = exo_cap.read()
             _, wrist_frame = wrist_cap.read()
             _, table_frame = table_cap.read()
 
-            observation_images_exo_df.append(exo_frame)
+            # observation_images_exo_df.append(exo_frame)
             observation_images_wrist_df.append(wrist_frame)
             observation_images_table_df.append(table_frame)
 
@@ -547,7 +547,7 @@ def create_meta(root_dir, episodes):
     stacked_task_index = np.stack(task_index_df, axis=0)
     # stacked_index = np.stack(index_df, axis=0)
 
-    stacked_exo = np.stack(observation_images_exo_df, axis=0)
+    # stacked_exo = np.stack(observation_images_exo_df, axis=0)
     stacked_wrist = np.stack(observation_images_wrist_df, axis=0)
     stacked_table = np.stack(observation_images_table_df, axis=0)
 
@@ -607,12 +607,12 @@ def create_meta(root_dir, episodes):
     #     "max":stacked_index.max(axis=0).reshape(1).tolist(),
     #     "min":stacked_index.min(axis=0).reshape(1).tolist(),
     # }
-    stats["observation.images.exo"]={
-        "mean":stacked_exo.mean(axis=(0,1,2)).reshape(3,1,1).tolist(),
-        "std":stacked_exo.std(axis=(0,1,2)).reshape(3,1,1).tolist(),
-        "max":stacked_exo.max(axis=(0,1,2)).reshape(3,1,1).tolist(),
-        "min":stacked_exo.min(axis=(0,1,2)).reshape(3,1,1).tolist(),
-    }
+    # stats["observation.images.exo"]={
+    #     "mean":stacked_exo.mean(axis=(0,1,2)).reshape(3,1,1).tolist(),
+    #     "std":stacked_exo.std(axis=(0,1,2)).reshape(3,1,1).tolist(),
+    #     "max":stacked_exo.max(axis=(0,1,2)).reshape(3,1,1).tolist(),
+    #     "min":stacked_exo.min(axis=(0,1,2)).reshape(3,1,1).tolist(),
+    # }
     stats["observation.images.wrist"]={
         "mean":stacked_wrist.mean(axis=(0,1,2)).reshape(3,1,1).tolist(),
         "std":stacked_wrist.std(axis=(0,1,2)).reshape(3,1,1).tolist(),
@@ -638,8 +638,8 @@ if __name__ == "__main__":
     #episodes = 20
     #create_meta(root_dir, episodes)
 
-    root_dir = "/data/ghkim/press_the_RGB_button_ep150"
-    episodes = 150
+    root_dir = "/data/ghkim/lerobot_data/open_the_drawer_ep200"
+    episodes = 200
     create_meta(root_dir, episodes)
 
     # root_dir = "/data/ghkim/press the green button/lerobot_5hz"

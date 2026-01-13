@@ -45,6 +45,9 @@ class PI0Config(PreTrainedConfig):
     # Image preprocessing
     resize_imgs_with_padding: tuple[int, int] = (224, 224)
 
+    # PCMB Module
+    memory_len: int = 16
+
     # Add empty images. Used by pi0_aloha_sim which adds the empty
     # left and right wrist cameras in addition to the top camera.
     empty_cameras: int = 0
@@ -53,7 +56,7 @@ class PI0Config(PreTrainedConfig):
     # the space used by the pi internal runtime which was used to train the base model.
     adapt_to_pi_aloha: bool = False
 
-    # Converts joint dimensions to deltas with respect to the current state before passing to the model.
+    # Converts joint dimensions to deltas with respxect to the current state before passing to the model.
     # Gripper dimensions will remain in absolute values.
     use_delta_joint_actions_aloha: bool = False
 

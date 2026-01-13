@@ -22,8 +22,8 @@ def sample_dataset(sample_target:list[int], data_dir, target_dir, start_idx):
         parquet_src_file = f"{data_dir}/data/chunk-{target_index // 50:03d}/episode_{target_index:06d}.parquet"
         parquet_des_file = f"{target_dir}/data/chunk-{index // 50:03d}/episode_{index:06d}.parquet"
 
-        exo_src_file = f"{data_dir}/videos/chunk-{target_index // 50:03d}/observation.images.exo/episode_{target_index:06d}.mp4"
-        exo_des_file = f"{target_dir}/videos/chunk-{index // 50:03d}/observation.images.exo/episode_{index:06d}.mp4"
+        #exo_src_file = f"{data_dir}/videos/chunk-{target_index // 50:03d}/observation.images.exo/episode_{target_index:06d}.mp4"
+        #exo_des_file = f"{target_dir}/videos/chunk-{index // 50:03d}/observation.images.exo/episode_{index:06d}.mp4"
 
         wrist_src_file = f"{data_dir}/videos/chunk-{target_index // 50:03d}/observation.images.wrist/episode_{target_index:06d}.mp4"
         wrist_des_file = f"{target_dir}/videos/chunk-{index // 50:03d}/observation.images.wrist/episode_{index:06d}.mp4"
@@ -35,7 +35,7 @@ def sample_dataset(sample_target:list[int], data_dir, target_dir, start_idx):
         des_dataset = src_dataset.map(lambda x: {"episode_index": index})
         des_dataset.to_parquet(parquet_des_file)
 
-        shutil.copy(exo_src_file, exo_des_file)
+        #shutil.copy(exo_src_file, exo_des_file)
         shutil.copy(wrist_src_file, wrist_des_file)
         shutil.copy(table_src_file, table_des_file)
 
@@ -82,9 +82,10 @@ if __name__ == '__main__':
     # which episode you want to sample
     # or random sample
     # sample_target = generate_unique_random_numbers_in_intervals(0, 2759, 2160, 600)
-    sample_target = list(range(0, 50))
+    sample_target = list(range(0, 10))
     # directory to merge
-    target_dir = '/data/ghkim/open_the_drawer_ep200'
+    # target_dir = '/data/ghkim/concat_data/press_button_N_time'
+    target_dir = '/data/ghkim/data_hub/find_open_the_drawer_ep120'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
@@ -92,31 +93,50 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
     ################### CHANGE TARGET DIRCTORY TOO !!!!!!!!!!!! #####################
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_BGR'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 0)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_BRG'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 100)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_GBR'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 200)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_GRB'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 300)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_RBG'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 400)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_RGB'
+    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 500)
+    # data_dir = '/data/ghkim/press_the_button_hand/press_the_blue_button_hand/lerobot_5hz'
+    # sample_dataset(sample_target, data_dir, target_dir, 20)
+
+    # # merge dataset 1
+    # data_dir = '/data/ghkim/concat_data/press_button_N_time/press_button_1'
+    # sample_dataset(sample_target, data_dir, target_dir, 0)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_N_time/press_button_2'
+    # sample_dataset(sample_target, data_dir, target_dir, 100)
+    #
+    # data_dir = '/data/ghkim/concat_data/press_button_N_time/press_button_3'
+    # sample_dataset(sample_target, data_dir, target_dir, 200)
+
+    data_dir = '/data/ghkim/data_hub/open_the_drawer_ep80'
+    sample_dataset(list(range(0, 80)), data_dir, target_dir, 0)
 
     # merge dataset 1
-    data_dir = '/data/ghkim/open_the_drawer_ep200/open_left_down_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 0)
+    data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40'
+    sample_dataset(list(range(0, 40)), data_dir, target_dir, 80)
 
-    data_dir = '/data/ghkim/open_the_drawer_ep200/open_left_up_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 50)
-
-    data_dir = '/data/ghkim/open_the_drawer_ep200/open_right_down_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 100)
-
-    data_dir = '/data/ghkim/open_the_drawer_ep200/open_right_up_drawer/lerobot_5hz'
-    sample_dataset(sample_target, data_dir, target_dir, 150)
-
-    # merge dataset 1
-    #data_dir = '/data/ghkim/pick_place_press/banana_blue_to_red/lerobot_5hz'
-    #sample_dataset(sample_target, data_dir, target_dir, 0)
-
-    # merge dataset 2
-    #data_dir = '/data/ghkim/pick_place_press/banana_blue_to_white/lerobot_5hz'
-    #sample_dataset(sample_target, data_dir, target_dir, 20)
-
-    # merge dataset 3
-    #data_dir = '/data/ghkim/pick_place_press/banana_red_to_blue/lerobot_5hz'
-    #sample_dataset(sample_target, data_dir, target_dir, 40)
+    # # merge dataset 2
+    # data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightdown_drawer_empty/lerobot_5hz'
+    # sample_dataset(sample_target, data_dir, target_dir, 20)
+    #
+    # # merge dataset 3
+    # data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightup_drawer_empty/lerobot_5hz'
+    # sample_dataset(sample_target, data_dir, target_dir, 30)
 
     #data_dir = '/data/ghkim/pick_place_press/banana_red_to_white/lerobot_5hz'
     #sample_dataset(sample_target, data_dir, target_dir, 60)

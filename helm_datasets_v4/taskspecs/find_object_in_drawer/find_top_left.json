@@ -7,7 +7,7 @@
   ],
   "episode_filters": [
     [
-      { "tasks": "open the top left drawer with hamburger" }
+      { "tasks": "open the top left drawer" }
     ]
   ],
   "llp_commands": "open the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
