@@ -50,7 +50,9 @@ from common.datasets.factory import make_dataset
 from common.datasets.utils import cycle
 from common.optim.factory import make_optimizer_and_scheduler
 from common.policies.adalora import AdaLoraLinear
+"""
 
+"""
 
 def update_policy(
     train_metrics: MetricsTracker,
@@ -208,44 +210,6 @@ def train(cfg: TrainPipelineConfig):
     test_dataloader = make_dataloader(cfg, test_dataset, device)
     test_dl_iter = cycle(test_dataloader)
 
-    ################################### Debug ###################################
-    dl = train_dataloader
-    it = iter(dl)
-    prev_ep, prev_t = None, None
-
-    for b in range(3):
-        batch = next(it)
-        ep = batch["episode_index"]  # 또는 batch["episode_ids"]로 네가 추가한 키
-        # torch tensor든 numpy든 둘 다 대응
-        ep_min = int(ep.min()) if hasattr(ep, "min") else int(ep.min())
-        ep_max = int(ep.max()) if hasattr(ep, "max") else int(ep.max())
-        print(f"[batch {b}] ep_min={ep_min} ep_max={ep_max} mixed={ep_min != ep_max} batch_size={len(ep)}")
-
-        fi = batch.get("frame_index", None)
-        if fi is None:
-            fi = batch.get("timestep", None)
-            print(f"[batch {b}] no frame_index/timestep key")
-            continue
-        # 같은 episode만 골라서 연속성 검사(episode 섞이면 첫 episode만 검사)
-        first_ep = int(ep[0])
-        mask = (ep == first_ep)
-        fi1 = fi[mask]
-        # 정렬돼 있나?
-        is_sorted = bool((fi1[1:] >= fi1[:-1]).all())
-        # 연속(=차이가 1)인가? (프레임 드랍이 있으면 꼭 1일 필요는 없음)
-        diffs = fi1[1:] - fi1[:-1]
-        print(f"[batch {b}] first_ep={first_ep} sorted={is_sorted}")
-
-        first_ep, last_ep = int(ep[0]), int(ep[-1])
-        first_t, last_t = (int(fi[0]), int(fi[-1])) if fi is not None else (None, None)
-
-        if prev_ep is not None and fi is not None:
-            # 같은 episode면 보통 prev_t < first_t 이어야 함
-            cont = (prev_ep == first_ep) and (prev_t is not None) and (prev_t < first_t)
-            print(f"[batch {b}] prev({prev_ep},{prev_t}) -> cur_first({first_ep},{first_t}) cont={cont}")
-
-        prev_ep, prev_t = last_ep, last_t
-    ################################### debug end ###################################
 
     if is_ddp_master(is_distributed, local_rank):
         logging.info("Creating policy")

@@ -73,7 +73,8 @@ CUDA_VISIBLE_DEVICES=6 python train/train_helm_v4/train_helm.py \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0113
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0113 \
+  --resume_from_checkpoint /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0113/checkpoint-200
   
 CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
@@ -176,6 +177,10 @@ class MixedBatchSampler:
                 if (step % world) == rank:
                     yield batch
         else:
+            working = {k: list(v) for k, v in self.pools.items()}
+            for k in working:
+                rng.shuffle(working[k])
+
             for step in range(self.steps_per_epoch):
                 batch: List[int] = []
                 for k, n in self.per_batch.items():
@@ -243,6 +248,10 @@ class ParamCountCallback(TrainerCallback):
 
 
 def build_model(model_name_or_path: str, use_qlora: bool, bf16: bool, attn_impl: str):
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if torch.cuda.is_available():
+        torch.cuda.set_device(local_rank)
+
     if use_qlora:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -250,12 +259,15 @@ def build_model(model_name_or_path: str, use_qlora: bool, bf16: bool, attn_impl:
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
         )
+        device_map = {"": local_rank}
     else:
         bnb_config = None
+        device_map = None
 
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_name_or_path,
         quantization_config=bnb_config,
+        device_map=device_map,
         torch_dtype=torch.bfloat16 if bf16 else torch.float16,
         attn_implementation=attn_impl,
         trust_remote_code=True,
@@ -326,6 +338,9 @@ def main():
     # wandb
     ap.add_argument("--wandb_project", type=str, default="RefMe")
     ap.add_argument("--wandb_run_name", type=str, default="")
+
+    ap.add_argument("--resume_from_checkpoint", type=str, default="",
+                    help="Path to a checkpoint dir (e.g., output_dir/checkpoint-XXXX). If empty, optionally auto-resume.")
 
     args = ap.parse_args()
 
@@ -436,7 +451,13 @@ def main():
         train_batch_sampler=sampler,
     )
 
-    trainer.train()
+    resume_ckpt = args.resume_from_checkpoint.strip() if args.resume_from_checkpoint else ""
+    if resume_ckpt:
+        print(f"[TRAIN] Resuming from checkpoint: {resume_ckpt}")
+        trainer.train(resume_from_checkpoint=resume_ckpt)
+    else:
+        trainer.train()
+
     trainer.save_model(args.output_dir)
 
 

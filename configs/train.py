@@ -87,6 +87,8 @@ class TrainPipelineConfig(HubMixin):
     prefix_tuning_cfg: dict[str, Any] | None = None
     lora_moe_cfg: dict[str, Any] | None = None
 
+    dataloader_type: str = "stream"
+
     def __post_init__(self):
         self.checkpoint_path = None
 

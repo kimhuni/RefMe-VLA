@@ -104,6 +104,6 @@ python -m helm_datasets_v4.build_helm \
 # Merge
 python helm_datasets_v4/merge_helm_data.py \
   --jsonl_root "${OUT_ROOT}/jsonl_v4" \
-  --out_dir   "${OUT_ROOT}/jsonl_v4/merged" \
+  --out_dir   "${OUT_ROOT}/merged" \
   --split_mode keep \
   --shard_size 0

@@ -84,6 +84,8 @@ class PI0_PCMB_Policy(PreTrainedPolicy):
     def reset(self):
         """This should be called whenever the environment is reset."""
         self._action_queue = deque([], maxlen=self.config.n_action_steps)
+        # Reset PCMB module
+        self.model.pcmb.reset()
 
     def get_optim_params(self) -> dict:
         return [p for p in self.parameters() if p.requires_grad]
@@ -110,35 +112,38 @@ class PI0_PCMB_Policy(PreTrainedPolicy):
             self.model.action_time_mlp_out,self.model.mem_adapter,
         ]
 
-    def forward(self, batch: dict[str, Tensor], method=None):
-        # 1) episode/timestep meta 추출 (키 이름은 네 dataset에 맞춰 유지)
-        ep_ids = batch.get("episode_index", None) or batch.get("episode_ids", None)
-        ts = batch.get("frame_index", None) or batch.get("timestep", None)
+    def forward(self, batch: dict[str, Tensor], noise=None, time=None):
+        # ---- 0) (처음 1회) batch 키 확인 ----
+        if not hasattr(self, "_printed_keys"):
+            print("[BATCH KEYS]", sorted(list(batch.keys())))
+            self._printed_keys = True
 
-        # episode change -> reset
+        # ---- 1) meta 추출 (or 금지) ----
+        ep_ids = batch.get("episode_index", None)
+        if ep_ids is None:
+            ep_ids = batch.get("episode_ids", None)
+
+        ts = batch.get("frame_index", None)
+        if ts is None:
+            ts = batch.get("timestep", None)
+
+        # ---- 2) episode change -> reset ----
         if ep_ids is not None:
-            ep0 = int(ep_ids[0].item()) if hasattr(ep_ids[0], "item") else int(ep_ids[0])
+            ep0 = int(ep_ids[0].item())
             if getattr(self, "_prev_ep0", None) != ep0:
                 self.model.pcmb.reset()
                 self._prev_ep0 = ep0
 
-        # 3) 모델에 meta “주입”
+        # ---- 3) 모델에 meta 주입 ----
         self.model.set_pcmb_meta(ep_ids, ts)
 
-        # 4) 원래 PreTrainedPolicy.forward 로직 그대로 사용
-        loss, out = super().forward(batch)
+        # ---- 4) meta 로그 ----
+        ep_str = "None" if ep_ids is None else f"({int(ep_ids.min())},{int(ep_ids.max())})"
+        ts_str = "None" if ts is None else f"({int(ts.min())},{int(ts.max())})"
+        print("[PCMB META] ep_ids:", ep_str, "ts:", ts_str)
 
-        #######################################################################################################
-        ep_ids = batch.get("episode_index") or batch.get("episode_ids")
-        ts = batch.get("frame_index") or batch.get("timestep")
-
-        self.model.set_pcmb_meta(ep_ids, ts)
-
-        print("[PCMB META] ep_ids:", None if ep_ids is None else (int(ep_ids.min()), int(ep_ids.max())))
-        print("[PCMB META] ts:", None if ts is None else (int(ts.min()), int(ts.max())))
-        #######################################################################################################
-
-        return loss, out
+        # ---- 5) 부모 forward 실행 ----
+        return super().forward(batch, noise=noise, time=time)
 
     def reset(self):
         self._action_queue = deque([], maxlen=self.config.n_action_steps)
@@ -525,11 +530,6 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         ep = getattr(self, "_pcmb_episode_ids", None)
         ts = getattr(self, "_pcmb_timesteps", None)
 
-        # DEBUG
-        # after action_out computed
-        if self.mem_adapter.in_features != action_out.shape[-1]:
-            raise RuntimeError(
-                f"mem_adapter expects {self.mem_adapter.in_features} but action_out dim is {action_out.shape[-1]}")
 
         action_out_list = []
         for i in range(action_out.shape[0]):  # B를 time처럼 scan
@@ -543,11 +543,20 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             ts_i = int(ts[i].item()) if ts is not None else i
 
             mem_ctx = self.pcmb.step(per_tokens[i], cog_tokens[i], timestep=ts_i)  # (2048,)
-            action_out_i = action_out[i] + self.mem_scale * self.mem_adapter(mem_ctx)[None, :]
+            mem_ctx = mem_ctx.to(dtype=self.mem_adapter.weight.dtype)
+            delta = self.mem_adapter(mem_ctx)  # (1024,)
+
+            action_out_i = action_out[i] + self.mem_scale * delta[None, :]
             action_out_list.append(action_out_i)
 
-            assert action_out.shape[-1] == self.action_out_proj.in_features, \
-                (action_out.shape, self.action_out_proj.in_features)
+            if mem_ctx.shape[-1] != self.mem_adapter.in_features:
+                raise RuntimeError(
+                    f"mem_ctx dim is {mem_ctx.shape[-1]} but mem_adapter expects in_features={self.mem_adapter.in_features}"
+                )
+            if action_out.shape[-1] != self.mem_adapter.out_features:
+                raise RuntimeError(
+                    f"action_out dim is {action_out.shape[-1]} but mem_adapter expects out_features={self.mem_adapter.out_features}"
+                )
 
         action_out = torch.stack(action_out_list, dim=0)
         action_out = action_out.to(dtype=self.state_proj.weight.dtype)
