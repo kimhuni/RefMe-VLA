@@ -15,7 +15,7 @@ python common/datasets/concat_dataset/generate_concat_recipe.py \
   --cap_per_episode 50
   
 python common/datasets/concat_dataset/generate_concat_recipe.py \
-  --task_episodes_json /home/ghkim/codes/RefMe-VLA/common/datasets/concat_dataset/episode_wipe_the_window.json \
+  --task_episodes_json /home/ghkim/codes/RefMe-VLA/common/datasets/concat_dataset/episode_wipe_the_window_ep150.json \
   --out_jsonl /data/ghkim/concat_data/wipe_the_window/wipe_BMT.jsonl \
   --task_order "wipe the bottom side of the window" "wipe the middle side of the window" "wipe the top side of the window" \
   --n 100 \

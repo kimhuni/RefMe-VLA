@@ -111,14 +111,14 @@ if __name__ == "__main__":
 
 
 
-    data_dir = Path("/data/ghkim/lerobot_data/open_the_drawer_ep200/data/chunk-002")
-    target_task_index = 8
-    sample_target = list(range(100, 150))
+    data_dir = Path("/data/ghkim/concat_data/wipe_the_window/data/chunk-000")
+    target_task_index = 29
+    sample_target = list(range(0, 50))
     change_task_index(data_dir, target_task_index, sample_target)
 
-    data_dir = Path("/data/ghkim/lerobot_data/open_the_drawer_ep200/data/chunk-003")
-    target_task_index = 9
-    sample_target = list(range(150, 200))
+    data_dir = Path("/data/ghkim/concat_data/wipe_the_window/data/chunk-001")
+    target_task_index = 29
+    sample_target = list(range(50, 100))
     change_task_index(data_dir, target_task_index, sample_target)
 
 

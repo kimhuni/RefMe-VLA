@@ -83,13 +83,13 @@ import pandas as pd
 
 """
 python common/datasets/concat_dataset/concat_lerobot_dataset.py \
-  --src_root /data/ghkim/data_hub/press_the_button_nolight_full \
-  --recipes /data/ghkim/concat_data/press_button_N_time/press_button_1.jsonl \
-  --out_root /data/ghkim/concat_data/press_button_N_time/press_button_1 \
+  --src_root /data/ghkim/lerobot_data/wipe_the_window_ep150 \
+  --recipes /data/ghkim/concat_data/wipe_the_window/wipe_BMT.jsonl \
+  --out_root /data/ghkim/concat_data/wipe_the_window \
   --fps 5.0 \
   --chunk_size 50 \
   --video_keys observation.images.table observation.images.wrist \
-  --drop_first_frames_each_part 4
+  --drop_first_frames_each_part 5
   
 python common/datasets/concat_dataset/concat_lerobot_dataset.py \
   --src_root /data/ghkim/data_hub/press_the_button_nolight_full \
@@ -119,12 +119,13 @@ python common/datasets/concat_dataset/concat_lerobot_dataset.py \
   --drop_first_frames_each_part 5
 
 python common/datasets/concat_dataset/concat_lerobot_dataset.py \
-  --src_root /data/ghkim/press_the_RGB_button_ep60 \
-  --recipes /data/ghkim/concat_data/press_button_N_time/press_button_2.jsonl \
-  --out_root /data/ghkim/concat_data/press_button_N_time/press_button_2 \
+  --src_root /data/ghkim/data_hub/wipe_the_window \
+  --recipes /data/ghkim/concat_data/wipe_the_window/wipe_BMT.jsonl \
+  --out_root /data/ghkim/concat_data/wipe_the_window \
   --fps 5.0 \
   --chunk_size 50 \
-  --video_keys observation.images.table observation.images.wrist
+  --video_keys observation.images.table observation.images.wrist \
+  --drop_first_frames_each_part 5
 """
 
 def safe_mkdir(p: str):

@@ -5,6 +5,7 @@ import glob
 import math
 import subprocess
 from pathlib import Path
+import shlex
 
 import pandas as pd
 import streamlit as st
@@ -31,9 +32,11 @@ def safe_mkdir(p: str):
     os.makedirs(p, exist_ok=True)
 
 def ffmpeg_extract_frame(video_path: str, time_sec: float, out_png: str):
-    """
-    Extract a single frame at time_sec to out_png using ffmpeg.
-    - Accurate seeking: place -ss after -i (slower, but precise)
+    """Extract a single frame at time_sec to out_png using ffmpeg.
+
+    Notes:
+    - If time_sec is past the end of the video, ffmpeg may succeed without producing an output file.
+    - We capture stderr for easier debugging.
     """
     safe_mkdir(str(Path(out_png).parent))
     cmd = [
@@ -45,7 +48,43 @@ def ffmpeg_extract_frame(video_path: str, time_sec: float, out_png: str):
         "-y",
         out_png,
     ]
-    subprocess.check_call(cmd)
+    try:
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, text=True)
+    except FileNotFoundError as e:
+        raise RuntimeError("ffmpeg not found in PATH") from e
+    if p.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed (code={p.returncode}): {p.stderr.strip()}")
+
+    if not os.path.exists(out_png):
+        # This often happens when seeking beyond duration.
+        raise RuntimeError("ffmpeg produced no output file (likely seek past video end).")
+
+
+def ffmpeg_extract_all_frames(video_path: str, out_dir: str):
+    """Extract all frames from a video into out_dir as PNGs: frame_000000.png, ..."""
+    safe_mkdir(out_dir)
+    out_pattern = os.path.join(out_dir, "frame_%06d.png")
+    cmd = [
+        "ffmpeg",
+        "-hide_banner", "-loglevel", "error",
+        "-i", video_path,
+        "-vsync", "0",
+        "-start_number", "0",
+        "-y",
+        out_pattern,
+    ]
+    try:
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, text=True)
+    except FileNotFoundError as e:
+        raise RuntimeError("ffmpeg not found in PATH") from e
+
+    if p.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed extracting all frames (code={p.returncode}): {p.stderr.strip()}")
+
+
+def cached_frame_path(cache_dir: str, frame_idx: int) -> str:
+    return os.path.join(cache_dir, f"frame_{frame_idx:06d}.png")
+
 
 def load_episode_df(parquet_path: str) -> pd.DataFrame:
     return pd.read_parquet(parquet_path)
@@ -68,7 +107,7 @@ st.title("LeRobot Episode Segment Annotator (start/end frame)")
 
 with st.sidebar:
     dataset_root = st.text_input("Dataset root", value="/data/ghkim/wipe_the_window_ep150")
-    chunk_size = st.number_input("Chunk size", value=1000, min_value=1, step=1)
+    chunk_size = st.number_input("Chunk size", value=50, min_value=1, step=1)
     fps = st.number_input("Video FPS (from dataset.json)", value=5.0, min_value=0.1, step=0.1)
     out_jsonl = st.text_input("Output segments.jsonl", value=os.path.join(dataset_root, "segments.jsonl"))
     video_keys = st.multiselect("Video keys", options=["observation.images.table", "observation.images.wrist"],
@@ -112,14 +151,8 @@ with colA:
     preview_sec = preview_f / float(fps)
     st.caption(f"preview time: {preview_sec:.3f}s  (frame={preview_f}, fps={fps})")
 
-    # Optional: event_frame_idxs input
-    event_frames_str = st.text_input("event_frame_idxs (comma-separated, optional)", value="")
-    event_frame_idxs = []
-    if event_frames_str.strip():
-        try:
-            event_frame_idxs = [int(x.strip()) for x in event_frames_str.split(",") if x.strip()]
-        except Exception:
-            st.warning("Failed to parse event_frame_idxs. Leave blank or use '12, 34' format.")
+    use_cached_frames = st.checkbox("Use cached extracted frames (recommended)", value=True)
+    extract_now = st.button("Extract ALL frames for this episode (cache)")
 
     save = st.button("Save segment → segments.jsonl", type="primary")
 
@@ -135,6 +168,8 @@ with colB:
         # default assumes folder is exactly vk
         return vk
 
+    base_cache_dir = os.path.join(dataset_root, ".frame_cache", f"episode_{ep:06d}")
+
     img_cols = st.columns(len(video_keys) if video_keys else 1)
     for i, vk in enumerate(video_keys):
         with img_cols[i]:
@@ -142,14 +177,39 @@ with colB:
             st.write(vk)
             st.code(vpath)
             if os.path.exists(vpath):
-                tmp_png = os.path.join(dataset_root, ".tmp_preview", f"ep{ep:06d}_{vk.replace('/','_')}_f{preview_f:06d}.png")
-                try:
-                    ffmpeg_extract_frame(vpath, preview_sec, tmp_png)
-                    img = Image.open(tmp_png).convert("RGB")
-                    st.image(img, use_container_width=True)
-                except Exception as e:
-                    st.error(f"ffmpeg extract failed: {e}")
-                    st.video(vpath)
+                # Cache directory per (episode, video_key)
+                vk_safe = vk.replace("/", "_")
+                cache_dir = os.path.join(base_cache_dir, vk_safe)
+
+                # If user requested extraction, extract full episode frames to cache
+                if extract_now:
+                    try:
+                        ffmpeg_extract_all_frames(vpath, cache_dir)
+                        st.success(f"Extracted frames to: {cache_dir}")
+                    except Exception as e:
+                        st.error(f"Frame extraction failed: {e}")
+
+                # Prefer cached frames if enabled and available
+                img_path = cached_frame_path(cache_dir, preview_f) if use_cached_frames else None
+
+                if use_cached_frames and img_path and os.path.exists(img_path):
+                    try:
+                        img = Image.open(img_path).convert("RGB")
+                        st.image(img, use_container_width=True)
+                        st.caption(f"cached: {img_path}")
+                    except Exception as e:
+                        st.error(f"Failed to load cached frame: {e}")
+                else:
+                    # Fallback: on-demand single-frame extraction
+                    tmp_png = os.path.join(dataset_root, ".tmp_preview", f"ep{ep:06d}_{vk_safe}_f{preview_f:06d}.png")
+                    try:
+                        ffmpeg_extract_frame(vpath, preview_sec, tmp_png)
+                        img = Image.open(tmp_png).convert("RGB")
+                        st.image(img, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"ffmpeg extract failed: {e}")
+                        st.caption("Tip: click 'Extract ALL frames for this episode (cache)' and enable cached mode.")
+                        st.video(vpath)
             else:
                 st.warning("Video not found")
 
@@ -166,7 +226,6 @@ if save:
         "end": int(end_f),
         "subtask": subtask,
         "notes": notes,
-        "event_frame_idxs": event_frame_idxs,
     }
     append_jsonl(out_jsonl, obj)
     st.success(f"Saved to {out_jsonl}\n{obj}")

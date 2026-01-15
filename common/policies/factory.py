@@ -43,10 +43,15 @@ def get_policy_class(name: str) -> PreTrainedPolicy:
 
         return PI0Policy
 
-    if name == "pi0_pcmb":
+    elif name == "pi0_pcmb":
         from common.policies.pi0_pcmb.modeling_pi0 import PI0_PCMB_Policy
 
         return PI0_PCMB_Policy
+
+    elif name == "pi0_memory":
+        from common.policies.pi0_memory.modeling_pi0 import PI0_MEMORY_Policy
+
+        return PI0_MEMORY_Policy
 
     elif name == "smolvla":
         from common.policies.smolvla.modeling_smolvla import SmolVLAPolicy

@@ -24,8 +24,8 @@ from transformers import AutoTokenizer
 
 from common.constants import ACTION, OBS_ROBOT
 from common.policies.normalize import Normalize, Unnormalize
-from common.policies.pi0_pcmb.configuration_pi0 import PI0Config
-from common.policies.pi0_pcmb.paligemma_with_expert import (
+from common.policies.pi0.configuration_pi0 import PI0Config
+from common.policies.pi0.paligemma_with_expert import (
     PaliGemmaWithExpertConfig,
     PaliGemmaWithExpertModel,
 )
@@ -46,7 +46,7 @@ def sample_beta(alpha, beta, bsize, device):
     return gamma1 / (gamma1 + gamma2)
 
 
-class PI0_PCMB_Policy(PreTrainedPolicy):
+class PI0_MEMORY_Policy(PreTrainedPolicy):
     """Wrapper class around PI0FlowMatching model to train and run inference within LeRobot."""
 
     config_class = PI0Config
@@ -84,8 +84,9 @@ class PI0_PCMB_Policy(PreTrainedPolicy):
     def reset(self):
         """This should be called whenever the environment is reset."""
         self._action_queue = deque([], maxlen=self.config.n_action_steps)
-        # Reset PCMB module
-        self.model.pcmb.reset()
+        # reset PCMB module
+        if hasattr(self.model, 'pcmb'):
+            self.model.pcmb.reset_memory()
 
     def get_optim_params(self) -> dict:
         return [p for p in self.parameters() if p.requires_grad]
@@ -109,46 +110,10 @@ class PI0_PCMB_Policy(PreTrainedPolicy):
             self.model.action_in_proj,
             self.model.action_out_proj,
             self.model.action_time_mlp_in,
-            self.model.action_time_mlp_out,self.model.mem_adapter,
+            self.model.action_time_mlp_out,
         ]
 
-    def forward(self, batch: dict[str, Tensor], noise=None, time=None):
-        # ---- 0) (처음 1회) batch 키 확인 ----
-        if not hasattr(self, "_printed_keys"):
-            print("[BATCH KEYS]", sorted(list(batch.keys())))
-            self._printed_keys = True
 
-        # ---- 1) meta 추출 (or 금지) ----
-        ep_ids = batch.get("episode_index", None)
-        if ep_ids is None:
-            ep_ids = batch.get("episode_ids", None)
-
-        ts = batch.get("frame_index", None)
-        if ts is None:
-            ts = batch.get("timestep", None)
-
-        # ---- 2) episode change -> reset ----
-        if ep_ids is not None:
-            ep0 = int(ep_ids[0].item())
-            if getattr(self, "_prev_ep0", None) != ep0:
-                self.model.pcmb.reset()
-                self._prev_ep0 = ep0
-
-        # ---- 3) 모델에 meta 주입 ----
-        self.model.set_pcmb_meta(ep_ids, ts)
-
-        # ---- 4) meta 로그 ----
-        ep_str = "None" if ep_ids is None else f"({int(ep_ids.min())},{int(ep_ids.max())})"
-        ts_str = "None" if ts is None else f"({int(ts.min())},{int(ts.max())})"
-        print("[PCMB META] ep_ids:", ep_str, "ts:", ts_str)
-
-        # ---- 5) 부모 forward 실행 ----
-        return super().forward(batch, noise=noise, time=time)
-
-    def reset(self):
-        self._action_queue = deque([], maxlen=self.config.n_action_steps)
-        self.model.pcmb.reset()
-        self._prev_ep0 = None
 
     # ---------------------------------------------------------
     # Component-wise norm helpers (vision, language, action generator)
@@ -328,17 +293,9 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         )
         self.paligemma_with_expert = PaliGemmaWithExpertModel(paligemma_with_export_config)
 
-        ################################### PCMB configs ###################################
-        hidden_dim = 2048  # PCMB/mem_ctx dim (prefix hidden)
-        self.pcmb = PCMB(d=hidden_dim, max_len=config.memory_len)
-        # action_out dim = proj_width = 1024 로 주입해야 함
-        self.mem_adapter = nn.Linear(hidden_dim, self.config.proj_width, bias=False)  # 2048 -> 1024 (O)
-        nn.init.zeros_(self.mem_adapter.weight)
-        self.mem_scale = 0.1
-        self.mem_gate = nn.Sequential(nn.Linear(self.config.proj_width * 2, 1, bias=True), nn.Sigmoid())
-        with torch.no_grad():
-            self.mem_gate[0].bias.fill_(-4.0)
-        #####################################################################################
+        llm_hidden_size = self.paligemma_with_expert.paligemma.config.text_config.hidden_size
+        self.pcmb = MemoryVLA_PCMB(d_high=llm_hidden_size)  # d_high=2048
+        self.pcmb = self.pcmb.to(dtype=torch.bfloat16)
 
         # Projections are float32
         self.state_proj = nn.Linear(self.config.max_state_dim, self.config.proj_width)
@@ -352,10 +309,6 @@ class PI0FlowMatching(PreTrainedFlowMatching):
 
         self.sample_dtype = self.state_proj.weight.dtype
 
-    def set_pcmb_meta(self, episode_ids=None, timesteps=None):
-        self._pcmb_episode_ids = episode_ids
-        self._pcmb_timesteps = timesteps
-
     def sample_time(self, bsize, device):
         time_beta = sample_beta(1.5, 1.0, bsize, device)
         time = time_beta * 0.999 + 0.001
@@ -368,7 +321,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return self.paligemma_with_expert.get_output_embeddings()
 
     def embed_prefix(
-        self, images, img_masks, lang_tokens, lang_masks, return_spans: bool = False
+        self, images, img_masks, lang_tokens, lang_masks
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed images with SigLIP and language tokens with embedding layer to prepare
         for PaliGemma transformer processing.
@@ -378,29 +331,25 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         pad_masks = []
         att_masks = []
 
-        spans = {"img_spans": [], "lang_span": None}
-        cursor = 0
-
         # TODO: remove for loop
-        for cam_idx, (img, img_mask) in enumerate(zip(images, img_masks, strict=False)):
+        for img, img_mask in zip(images, img_masks, strict=False):
+            # 1. Original Embedding
             img_emb = self.paligemma_with_expert.embed_image(img)
             img_emb = img_emb.to(dtype=torch.bfloat16)
 
-            # Normalize image embeddings
+            # 2. Apply PCMB (Compression -> Memory -> Restore)
+            # img_emb shape: [Batch, Seq_Len, Hidden_Dim]
+            img_emb = self.pcmb(img_emb)  # <--- HERE IS THE MAGIC
+
+            # 3. Original Normalization
             img_emb_dim = img_emb.shape[-1]
-            img_emb = img_emb * torch.tensor(img_emb_dim**0.5, dtype=img_emb.dtype, device=img_emb.device)
+            img_emb = img_emb * torch.tensor(img_emb_dim ** 0.5, dtype=img_emb.dtype, device=img_emb.device)
 
             bsize, num_img_embs = img_emb.shape[:2]
-
-            spans["img_spans"].append((cam_idx, cursor, cursor + num_img_embs))  #
-            cursor += num_img_embs#
-
             img_mask = img_mask[:, None].expand(bsize, num_img_embs)
 
             embs.append(img_emb)
             pad_masks.append(img_mask)
-
-            # Create attention masks so that image tokens attend to each other
             att_masks += [0] * num_img_embs
 
         lang_emb = self.paligemma_with_expert.embed_language_tokens(lang_tokens)
@@ -408,10 +357,6 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         # Normalize language embeddings
         lang_emb_dim = lang_emb.shape[-1]
         lang_emb = lang_emb * math.sqrt(lang_emb_dim)
-
-        bsize = lang_emb.shape[0]#
-        num_lang = lang_emb.shape[1]#
-        spans["lang_span"] = (cursor, cursor + num_lang)#
 
         embs.append(lang_emb)
         pad_masks.append(lang_masks)
@@ -425,8 +370,6 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         att_masks = torch.tensor(att_masks, dtype=torch.bool, device=pad_masks.device)
         att_masks = att_masks[None, :].expand(bsize, len(att_masks))
 
-        if return_spans:
-            return embs, pad_masks, att_masks, spans
         return embs, pad_masks, att_masks
 
     def embed_suffix(self, state, noisy_actions, timestep):
@@ -498,10 +441,9 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        prefix_embs, prefix_pad_masks, prefix_att_masks, spans = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, return_spans=True
+        prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
+            images, img_masks, lang_tokens, lang_masks
         )
-
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, time)
 
         pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
@@ -510,8 +452,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
         position_ids = torch.cumsum(pad_masks, dim=1) - 1
 
-        # (_, suffix_out), _ = self.paligemma_with_expert.forward(
-        (prefix_out, suffix_out), past_key_values = self.paligemma_with_expert.forward(
+        (_, suffix_out), _ = self.paligemma_with_expert.forward(
             attention_mask=att_2d_masks,
             position_ids=position_ids,
             past_key_values=None,
@@ -519,68 +460,12 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             use_cache=False,
             fill_kv_cache=False,
         )
+        suffix_out = suffix_out[:, -self.config.n_action_steps :]
+        # Original openpi code, upcast attention output
+        suffix_out = suffix_out.to(dtype=self.state_proj.weight.dtype)
+        v_t = self.action_out_proj(suffix_out)
 
-        ############################################ [PCMB Module] ############################################
-        # spans["lang_span"] = (LANG_S, LANG_E)
-        LANG_S, LANG_E = spans["lang_span"]
-        N_IMG = LANG_S
-        COG_IDX = LANG_E - 1
-
-        per_tokens = prefix_embs[:, :N_IMG, :]  # (B, N_IMG, 2048)
-        cog_tokens = prefix_out[:, COG_IDX, :]  # (B, 2048)
-
-        # action_out: (B, T, proj_width=1024)  ← 이게 맞음
-        action_out = suffix_out[:, -self.config.n_action_steps:, :]
-
-        # [중요] mem_scale=0이거나 pcmb 없으면 완전 스킵 (vanilla 동일 보장)
-        if (self.pcmb is None) or (self.mem_scale == 0.0):
-            action_out = action_out.to(dtype=self.state_proj.weight.dtype)
-            v_t = self.action_out_proj(action_out)
-            losses = F.mse_loss(u_t, v_t, reduction="none")
-            return losses
-
-        ep = getattr(self, "_pcmb_episode_ids", None)
-        ts = getattr(self, "_pcmb_timesteps", None)
-
-        # dtype/device 맞춘 scale 텐서
-        scale = torch.tensor(self.mem_scale, device=action_out.device, dtype=action_out.dtype)
-
-        action_out_list = []
-        for i in range(action_out.shape[0]):
-            # episode change -> reset
-            if ep is not None and i > 0:
-                epi = int(ep[i].item())
-                ep_prev = int(ep[i - 1].item())
-                if epi != ep_prev:
-                    self.pcmb.reset()
-
-            ts_i = int(ts[i].item()) if ts is not None else i
-
-            # ---- retrieve memory ctx (2048) ----
-            mem_ctx = self.pcmb.step(per_tokens[i], cog_tokens[i], timestep=ts_i)  # (2048,)
-
-            # ---- delta: 2048 -> 1024, float32 안정 계산 ----
-            delta_f = self.mem_adapter(mem_ctx.float())  # (1024,) float32
-            delta = delta_f.to(dtype=action_out.dtype)  # (1024,) bf16
-
-            # ---- action summary ----
-            a_mean_f = action_out[i].mean(dim=0).float()  # (1024,) float32
-
-            # ---- scalar gate (float32) ----
-            g = self.mem_gate(torch.cat([a_mean_f, delta_f], dim=-1))  # (1,) float32
-            g_val = g.to(dtype=action_out.dtype)  # (1,) bf16
-
-            # ---- gated injection ----
-            action_out_i = action_out[i] + (scale * g_val) * delta[None, :]  # (T,1024)
-            action_out_list.append(action_out_i)
-
-        action_out = torch.stack(action_out_list, dim=0)  # (B, T, 1024)
-
-        # projection head
-        action_out = action_out.to(dtype=self.state_proj.weight.dtype)
-        v_t = self.action_out_proj(action_out)
         losses = F.mse_loss(u_t, v_t, reduction="none")
-
         return losses
 
     def sample_actions(self, images, img_masks, lang_tokens, lang_masks, state, noise=None) -> Tensor:
@@ -597,15 +482,13 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
             images, img_masks, lang_tokens, lang_masks
         )
-
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
         torch.cuda.synchronize()
         t_image_encoders = log_time()
 
         # Compute image and language key value cache
-        # _, past_key_values = self.paligemma_with_expert.forward(
-        outputs_embeds, past_key_values = self.paligemma_with_expert.forward(
+        _, past_key_values = self.paligemma_with_expert.forward(
             attention_mask=prefix_att_2d_masks,
             position_ids=prefix_position_ids,
             past_key_values=None,
@@ -613,8 +496,6 @@ class PI0FlowMatching(PreTrainedFlowMatching):
             use_cache=self.config.use_cache,
             fill_kv_cache=True,
         )
-
-
         t_observation_forward_pass = log_time()
 
         dt = -1.0 / self.config.num_steps
@@ -683,38 +564,104 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return v_t
 
 
-class PCMB(nn.Module):
-    def __init__(self, d: int, max_len: int = 16):
+class MemoryVLA_PCMB(nn.Module):
+    def __init__(self, d_high, d_low=512, n_slots=8, beta=0.1):
         super().__init__()
-        self.d = d
-        self.max_len = max_len
-        self.reset()
+        self.d_low = d_low
+        self.n_slots = n_slots
+        self.beta = beta
 
-    def reset(self):
-        self.per_bank = []   # list[Tensor] each (d,)
-        self.cog_bank = []   # list[Tensor] each (d,)
-        self.t_bank = []     # list[int]
+        # Compressor
+        self.compressor = nn.Sequential(
+            nn.Linear(d_high, d_low),
+            nn.LayerNorm(d_low),
+            nn.GELU()
+        )
 
-    def detach_(self):
-        self.per_bank = [x.detach() for x in self.per_bank]
-        self.cog_bank = [x.detach() for x in self.cog_bank]
+        # Memory Bank (Persistent Buffer)
+        self.register_buffer("memory_bank", torch.randn(n_slots, d_low))
 
-    def step(self, per: torch.Tensor, cog: torch.Tensor, timestep: int | None = None):
-        # per: (N, d) -> pooled (d,)
-        per_vec = per.mean(dim=0)  # (d,)
-        cog_vec = cog              # (d,)
+        # Restorer
+        self.restorer = nn.Sequential(
+            nn.Linear(d_low, d_high),
+            nn.LayerNorm(d_high)
+        )
 
-        # update (detach 저장)
-        self.per_bank.append(per_vec.detach())
-        self.cog_bank.append(cog_vec.detach())
-        self.t_bank.append(int(timestep) if timestep is not None else len(self.t_bank))
+        # Fusion
+        self.fusion = nn.Linear(d_low * 2, d_low)
 
-        # truncate
-        if len(self.per_bank) > self.max_len:
-            self.per_bank = self.per_bank[-self.max_len:]
-            self.cog_bank = self.cog_bank[-self.max_len:]
-            self.t_bank = self.t_bank[-self.max_len:]
+    def reset_memory(self):
+        # 안전한 초기화를 위해 std를 작게 설정 (0.02)
+        nn.init.normal_(self.memory_bank, mean=0.0, std=0.02)
 
-        # retrieve: recent average
-        mem = torch.stack(self.per_bank, dim=0).mean(dim=0) + torch.stack(self.cog_bank, dim=0).mean(dim=0)
-        return mem  # (d,)
+    def forward(self, x_img):
+        # [Safety 1] 입력 데이터 오염 체크 (NaN/Inf 제거)
+        if torch.isnan(x_img).any() or torch.isinf(x_img).any():
+            # 디버깅용: 로그를 남길 수 있다면 남기는 것이 좋음
+            # print("Warning: NaN/Inf detected in input image embeddings. Replacing with zeros.")
+            x_img = torch.nan_to_num(x_img, nan=0.0, posinf=1.0, neginf=-1.0)
+
+        # 1. Compress
+        z_img = self.compressor(x_img)  # [B, S, d_low] (BFloat16)
+
+        # [Safety 2] 정밀 연산을 위해 Float32로 변환 및 Clamping
+        # BFloat16에서 값이 65504를 넘어가면 Inf가 되므로, 적당한 범위로 클램핑
+        z_img_safe = z_img.to(dtype=torch.float32)
+        z_img_safe = torch.clamp(z_img_safe, min=-100.0, max=100.0)
+
+        mem_safe = self.memory_bank.to(dtype=torch.float32)
+        # 메모리 뱅크도 오염되었을 수 있으므로 클린업
+        mem_safe = torch.nan_to_num(mem_safe, nan=0.0)
+
+        # 2. Similarity (Safe Normalize)
+        # eps를 1e-5로 넉넉하게 주어 Division by Zero 방지
+        norm_mem = F.normalize(mem_safe, p=2, dim=-1, eps=1e-5)
+        norm_z = F.normalize(z_img_safe, p=2, dim=-1, eps=1e-5)
+
+        sim = torch.matmul(norm_z, norm_mem.t())
+        best_slot_idx = torch.argmax(sim, dim=-1)  # [B, S]
+
+        # 3. Memory Retrieval
+        # mem_safe(Float32)에서 가져오되, 다시 BFloat16으로 변환할 준비
+        z_cog_safe = mem_safe[best_slot_idx]  # [B, S, d_low]
+
+        # 4. Memory Update (Training Only)
+        if self.training:
+            with torch.no_grad():
+                slot_masks = F.one_hot(best_slot_idx, num_classes=self.n_slots).float()
+
+                # Einsum
+                slot_updates = torch.einsum('bsd,bsk->kd', z_img_safe, slot_masks)
+                slot_counts = slot_masks.sum(dim=(0, 1)).unsqueeze(-1) + 1e-5  # eps 안전장치
+
+                new_slot_values = slot_updates / slot_counts
+
+                # [Safety 3] 업데이트 값 검증
+                if torch.isnan(new_slot_values).any() or torch.isinf(new_slot_values).any():
+                    # 업데이트 값이 썩었으면 업데이트 취소 (기존 메모리 유지)
+                    new_slot_values = torch.nan_to_num(new_slot_values, nan=0.0)
+                    update_mask = torch.zeros_like(slot_counts)  # No update
+                else:
+                    # 유효한 슬롯만 업데이트
+                    update_mask = (slot_counts > 1e-5).float()
+
+                # EMA Update (Float32로 수행 후 원본 버퍼에 저장)
+                updated_mem = (1 - self.beta) * mem_safe + \
+                              self.beta * new_slot_values * update_mask + \
+                              mem_safe * (1 - update_mask)
+
+                # 다시 버퍼에 넣을 때도 체크
+                self.memory_bank.data = updated_mem.to(dtype=self.memory_bank.dtype)
+
+        # 5. Fusion & Restore
+        # Float32 -> BFloat16 (원래 파이프라인 복귀)
+        z_cog = z_cog_safe.to(dtype=z_img.dtype)
+
+        # 혹시 모를 z_img의 오염 방지를 위해 z_img도 다시 cleaning할 수 있음
+        z_img = torch.nan_to_num(z_img, nan=0.0)
+
+        z_concat = torch.cat([z_img, z_cog], dim=-1)
+        z_fused = F.gelu(self.fusion(z_concat))
+        x_recon = self.restorer(z_fused)
+
+        return x_recon

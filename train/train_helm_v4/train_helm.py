@@ -61,20 +61,19 @@ CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --wandb_run_name HLP_HeLM_v4_qwen_3b_press_button_N_times
 
 # Qwen 7b mode
-CUDA_VISIBLE_DEVICES=6 python train/train_helm_v4/train_helm.py \
+CUDA_VISIBLE_DEVICES=3 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
   --train_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_train.jsonl \
   --val_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_val.jsonl \
   --num_images 1 \
-  --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0113 \
+  --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0115 \
   --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
   --num_train_epochs 3 \
   --with_replacement True \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0113 \
-  --resume_from_checkpoint /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0113/checkpoint-200
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0115
   
 CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
@@ -325,7 +324,7 @@ def main():
     ap.add_argument("--weight_decay", type=float, default=0.0)
     ap.add_argument("--warmup_ratio", type=float, default=0.03)
     ap.add_argument("--logging_steps", type=int, default=5)
-    ap.add_argument("--save_steps", type=int, default=100)
+    ap.add_argument("--save_steps", type=int, default=500)
     ap.add_argument("--eval_steps", type=int, default=50)
     ap.add_argument("--gradient_accumulation_steps", type=int, default=1)
     ap.add_argument("--dataloader_num_workers", type=int, default=4)
