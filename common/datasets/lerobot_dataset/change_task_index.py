@@ -110,16 +110,72 @@ if __name__ == "__main__":
     # change_task_index(data_dir, target_task_index, sample_target)
 
 
-
-    data_dir = Path("/data/ghkim/concat_data/wipe_the_window/data/chunk-000")
-    target_task_index = 29
+# BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_BWR/data/chunk-000")
+    target_task_index = 34
     sample_target = list(range(0, 50))
     change_task_index(data_dir, target_task_index, sample_target)
 
-    data_dir = Path("/data/ghkim/concat_data/wipe_the_window/data/chunk-001")
-    target_task_index = 29
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_BWR/data/chunk-001")
+    target_task_index = 34
     sample_target = list(range(50, 100))
     change_task_index(data_dir, target_task_index, sample_target)
+
+    # BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_BRW/data/chunk-000")
+    target_task_index = 35
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_BRW/data/chunk-001")
+    target_task_index = 35
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    # BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_RBW/data/chunk-000")
+    target_task_index = 36
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_RBW/data/chunk-001")
+    target_task_index = 36
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    # BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_RWB/data/chunk-000")
+    target_task_index = 37
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_RWB/data/chunk-001")
+    target_task_index = 37
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    # BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_WBR/data/chunk-000")
+    target_task_index = 38
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_WBR/data/chunk-001")
+    target_task_index = 38
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    # BWR
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_WRB/data/chunk-000")
+    target_task_index = 39
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/pick_place_press/pick_place_press_WRB/data/chunk-001")
+    target_task_index = 39
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
 
 
 

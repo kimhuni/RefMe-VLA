@@ -83,9 +83,9 @@ import pandas as pd
 
 """
 python common/datasets/concat_dataset/concat_lerobot_dataset.py \
-  --src_root /data/ghkim/lerobot_data/wipe_the_window_ep150 \
-  --recipes /data/ghkim/concat_data/wipe_the_window/wipe_BMT.jsonl \
-  --out_root /data/ghkim/concat_data/wipe_the_window \
+  --src_root /data/ghkim/lerobot_data/pick_place_press_ep150 \
+  --recipes /data/ghkim/concat_data/pick_place_press/pick_place_press_BWR.jsonl \
+  --out_root /data/ghkim/concat_data/pick_place_press/pick_place_press_BWR \
   --fps 5.0 \
   --chunk_size 50 \
   --video_keys observation.images.table observation.images.wrist \
