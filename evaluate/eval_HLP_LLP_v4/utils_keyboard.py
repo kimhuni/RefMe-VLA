@@ -48,8 +48,13 @@ TASK_KEYMAP: Dict[str, Dict[str, str]] = {
     },
     "press_button_in_human_order": {
         "1": "human_press_BGR",
+        "2": "human_press_BRG",
+        "3": "human_press_GBR",
+        "4": "human_press_GRB",
+        "5": "human_press_RBG",
+        "6": "human_press_RGB",
     },
-    "wipe_the_remainin_window": {
+    "wipe_the_remaining_window": {
         "1": "wipe_bottom_middle_remain",
         "2": "wipe_bottom_remain",
         "3": "wipe_bottom_top_remain",

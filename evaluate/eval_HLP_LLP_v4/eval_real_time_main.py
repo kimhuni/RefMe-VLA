@@ -61,7 +61,6 @@ def _make_dummy_image(size: Tuple[int, int] = (224, 224)) -> List[Image.Image]:
     """
     return Image.new("RGB", size, color=(0, 0, 0))
 
-
 def _load_taskspecs_from_group(taskspecs_dir: str, task_group: str) -> Dict[str, TaskSpecRuntime]:
     """
     taskspecs_dir/<task_group> 아래 모든 json 재귀 로드
@@ -204,6 +203,8 @@ def run_hlp_detect(
     out = hlp.detect(batch_d)
     dt = time.time() - t0
 
+    print("[DETECT] detect time: ", dt)
+
     # backward-compat: hlp.detect가 bool만 리턴하는 버전이면 event는 none
     if isinstance(out, tuple) and len(out) == 2:
         detected, event = out
@@ -242,6 +243,8 @@ def run_hlp_update(
     upd = hlp.update(batch_u)
     dt = time.time() - t0
 
+    print("[UPDATE] update time: ", dt)
+
     next_memory = {
         "Working_Memory": upd.get("Working_Memory", ""),
         "Episodic_Context": upd.get("Episodic_Context", ""),
@@ -249,7 +252,7 @@ def run_hlp_update(
     }
     return next_memory, dt
 
-def eval_real_time_main_v3(
+def eval_real_time_main_v4(
     hlp: HLPQwenV2,
     llp_cfg: LLPConfig,
     specs: Dict[str, TaskSpecRuntime],
@@ -284,7 +287,8 @@ def eval_real_time_main_v3(
                 current_memory = None
                 kstate["reset_episode"] = False
                 logger.info("[MAIN] episode reset -> GI=None, memory=None, inter=0")
-                time.sleep(5)
+                llp_send_zero(llp_ctx)
+                time.sleep(3)
 
             # [Memory Init]
             sel_tid = kstate.get("selected_task_id", None)
@@ -301,6 +305,11 @@ def eval_real_time_main_v3(
                     current_task_id = sel_tid
                     current_inter_idx = 0
                     global_instruction = new_spec.task_text[0]
+                    print("Global_instruction: ", global_instruction)
+
+                    logger.info(
+                        f"[MAIN] '{global_instruction}' -> UPDATE"
+                    )
 
                     obs_pil_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
                     current_memory, dt = run_hlp_update(
@@ -309,12 +318,12 @@ def eval_real_time_main_v3(
                         task_text=global_instruction,
                         prev_memory=prev_mem,
                         allowed_actions=new_spec.allowed_actions,
-                        event="none",
+                        event="task initialized",
                         n_images=1,
                     )
                     logger.info(
                         f"[MAIN] task_id={sel_tid} inter=0 UPDATE@select {dt:.3f}s "
-                        f"GI='{global_instruction}' Action='{current_memory.get('Action_Command','')}'"
+                        f"Global_Instruction='{global_instruction}' Action='{current_memory.get('Action_Command','')}'"
                     )
 
             # [Inter Episode Task] next inter (n): same task_id, switch to task_text[1] if exists, UPDATE 한번
@@ -332,6 +341,7 @@ def eval_real_time_main_v3(
                         prev_mem = current_memory
                         current_inter_idx += 1
                         global_instruction = spec.task_text[current_inter_idx]
+                        print("New global instruction:", global_instruction)
                         obs_pil_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
                         current_memory, dt = run_hlp_update(
                             hlp=hlp,
@@ -370,6 +380,12 @@ def eval_real_time_main_v3(
             # 1장 고정: table 관측만 사용
             obs_pil = _to_pil_from_tensor(obs_img_t)
 
+            plt.figure()
+            plt.imshow(obs_pil)
+            plt.title(f"[UPDATE] image for debug | table step={step}")
+            plt.axis("off")
+            plt.show()
+
             # UPDATE에서 재사용할 수 있게 캐시
             last_obs_pil = obs_pil
 
@@ -399,11 +415,21 @@ def eval_real_time_main_v3(
                     n_images=1,
                 )
 
+                state, obs_img_t, _wrist_img_t = capture_shared_observation(
+                    piper=llp_ctx.piper,
+                    table_rs_cam=llp_ctx.table_rs_cam,
+                    wrist_rs_cam=llp_ctx.wrist_rs_cam,
+                    use_devices=llp_ctx.cfg.use_devices,
+                    use_end_pose=True,
+                )
+
             event = detected  # keep existing downstream logging expectations
 
             # [LLP] step - Action_Command
             cmd = str(current_memory.get("Action_Command", "")).strip()
-            if cmd:
+
+            if cmd and ((cmd != "done") and (cmd != "wait")):
+                print("[LLP] executing command: ", cmd)
                 llp_batch = create_llp_batch_from_obs(
                     state=state,
                     table_img=obs_img_t,
@@ -419,14 +445,6 @@ def eval_real_time_main_v3(
             fps = step / max(1e-6, (time.time() - t_start))
             print(f"[MAIN] current_memory = f{current_memory} \n")
             print("=========================================================[Action Done]=================================================================")
-            # logger.info(
-            #     f"[MAIN] Action Done \n"
-            #     f"step={step} fps={fps:.2f} group='{task_group}' \n"
-            #     f"task_id='{current_task_id}' inter={current_inter_idx} event={event} \n"
-            #     f"current_memory = f{current_memory} \n"
-            #     f"cmd='{cmd}' hlp_detect={t_detect:.3f}s hlp_update={t_update:.3f}s llp={t_llp:.3f}s\n"
-            #     "=========================================================================================================================="
-            # )
 
     finally:
         try:
@@ -481,8 +499,7 @@ if __name__ == "__main__":
         max_steps=args.max_steps,
         device=args.llp_device,
     )
-
-    eval_real_time_main_v3(
+    eval_real_time_main_v4(
         hlp=hlp,
         llp_cfg=llp_cfg,
         specs=specs,
