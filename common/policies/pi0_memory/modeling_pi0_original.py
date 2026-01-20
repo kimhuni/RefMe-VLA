@@ -321,7 +321,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return self.paligemma_with_expert.get_output_embeddings()
 
     def embed_prefix(
-        self, images, img_masks, lang_tokens, lang_masks, episode_step=None
+        self, images, img_masks, lang_tokens, lang_masks
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed images with SigLIP and language tokens with embedding layer to prepare
         for PaliGemma transformer processing.
@@ -339,7 +339,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
 
             # 2. Apply PCMB (Compression -> Memory -> Restore)
             # img_emb shape: [Batch, Seq_Len, Hidden_Dim]
-            img_emb = self.pcmb(img_emb, episode_step=episode_step)  # <--- HERE IS THE MAGIC
+            img_emb = self.pcmb(img_emb)  # <--- HERE IS THE MAGIC
 
             # 3. Original Normalization
             img_emb_dim = img_emb.shape[-1]
@@ -441,10 +441,8 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        current_step = None
-
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, episode_step=current_step
+            images, img_masks, lang_tokens, lang_masks
         )
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, time)
 
@@ -566,128 +564,101 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return v_t
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class MemoryVLA_PCMB(nn.Module):
-    def __init__(self, d_high, d_low=512, n_slots=16, beta=0.01, num_heads=4):
+    def __init__(self, d_high, d_low=512, n_slots=8, beta=0.1):
         super().__init__()
         self.d_low = d_low
         self.n_slots = n_slots
         self.beta = beta
 
-        # 1. Compressor
+        # Compressor
         self.compressor = nn.Sequential(
             nn.Linear(d_high, d_low),
             nn.LayerNorm(d_low),
             nn.GELU()
         )
 
-        # [NEW] Time Embedding Projection
-        # Sinusoidal 임베딩을 d_low 차원으로 맞춰주는 레이어
-        self.time_proj = nn.Sequential(
-            nn.Linear(d_low, d_low),
-            nn.GELU()
-        )
-
-        # 2. Memory Bank
+        # Memory Bank (Persistent Buffer)
         self.register_buffer("memory_bank", torch.randn(n_slots, d_low))
 
-        # 3. Learnable Cross-Attention
-        self.attention = nn.MultiheadAttention(embed_dim=d_low, num_heads=num_heads, batch_first=True)
-
-        # 4. Restorer
+        # Restorer
         self.restorer = nn.Sequential(
             nn.Linear(d_low, d_high),
             nn.LayerNorm(d_high)
         )
 
-        # 5. Fusion
+        # Fusion
         self.fusion = nn.Linear(d_low * 2, d_low)
 
     def reset_memory(self):
+        # 안전한 초기화를 위해 std를 작게 설정 (0.02)
         nn.init.normal_(self.memory_bank, mean=0.0, std=0.02)
 
-    # [CHANGE] forward 함수에 episode_step 인자 추가
-    def forward(self, x_img, episode_step=None):
-        # x_img: [B, S, D]
-
-        # [Safety] Input Guard
+    def forward(self, x_img):
+        # [Safety 1] 입력 데이터 오염 체크 (NaN/Inf 제거)
         if torch.isnan(x_img).any() or torch.isinf(x_img).any():
+            # 디버깅용: 로그를 남길 수 있다면 남기는 것이 좋음
+            # print("Warning: NaN/Inf detected in input image embeddings. Replacing with zeros.")
             x_img = torch.nan_to_num(x_img, nan=0.0, posinf=1.0, neginf=-1.0)
 
         # 1. Compress
         z_img = self.compressor(x_img)  # [B, S, d_low] (BFloat16)
 
-        # [NEW] Time Embedding Injection
-        if episode_step is not None:
-            time_emb = create_sinusoidal_pos_embedding(
-                episode_step,
-                dimension=self.d_low,
-                min_period=1.0,
-                max_period=10000.0,
-                device=z_img.device
-            )
-            # Time embedding dtype match (Float32 -> BFloat16)
-            time_emb = time_emb.to(dtype=z_img.dtype)
+        # [Safety 2] 정밀 연산을 위해 Float32로 변환 및 Clamping
+        # BFloat16에서 값이 65504를 넘어가면 Inf가 되므로, 적당한 범위로 클램핑
+        z_img_safe = z_img.to(dtype=torch.float32)
+        z_img_safe = torch.clamp(z_img_safe, min=-100.0, max=100.0)
 
-            t_feat = self.time_proj(time_emb).unsqueeze(1)
-            z_img = z_img + t_feat
+        mem_safe = self.memory_bank.to(dtype=torch.float32)
+        # 메모리 뱅크도 오염되었을 수 있으므로 클린업
+        mem_safe = torch.nan_to_num(mem_safe, nan=0.0)
 
-        # 2. Cleaning & Clamping (Float32로 안전하게 수행)
-        z_img_float = z_img.to(dtype=torch.float32)
-        z_img_float = torch.clamp(z_img_float, min=-100.0, max=100.0)
+        # 2. Similarity (Safe Normalize)
+        # eps를 1e-5로 넉넉하게 주어 Division by Zero 방지
+        norm_mem = F.normalize(mem_safe, p=2, dim=-1, eps=1e-5)
+        norm_z = F.normalize(z_img_safe, p=2, dim=-1, eps=1e-5)
 
-        mem_float = self.memory_bank.to(dtype=torch.float32)
-        mem_float = torch.nan_to_num(mem_float, nan=0.0)
+        sim = torch.matmul(norm_z, norm_mem.t())
+        best_slot_idx = torch.argmax(sim, dim=-1)  # [B, S]
 
-        # ==============================================================================
-        # [FIX] Attention 모듈 입력을 위해 BFloat16으로 변환
-        # self.attention 가중치가 BFloat16이므로 입력도 맞춰야 함
-        # ==============================================================================
-        target_dtype = self.attention.in_proj_weight.dtype  # 보통 BFloat16
+        # 3. Memory Retrieval
+        # mem_safe(Float32)에서 가져오되, 다시 BFloat16으로 변환할 준비
+        z_cog_safe = mem_safe[best_slot_idx]  # [B, S, d_low]
 
-        query = z_img_float.to(dtype=target_dtype)
-
-        batch_size, seq_len, _ = query.shape
-        # Memory Expansion [N, D] -> [B, N, D]
-        key_value = mem_float.unsqueeze(0).expand(batch_size, -1, -1).to(dtype=target_dtype)
-
-        # Attention 실행 (BFloat16)
-        z_cog, attn_weights = self.attention(
-            query=query,
-            key=key_value,
-            value=key_value,
-            need_weights=True
-        )
-
-        # 3. Memory Update (Training Only)
+        # 4. Memory Update (Training Only)
         if self.training:
             with torch.no_grad():
-                # [FIX] 정밀한 업데이트를 위해 attn_weights를 Float32로 변환
-                # (z_img_float, mem_float는 이미 Float32임)
-                attn_weights_float = attn_weights.to(dtype=torch.float32)
+                slot_masks = F.one_hot(best_slot_idx, num_classes=self.n_slots).float()
 
-                # Einsum (Float32 연산)
-                weighted_inputs = torch.einsum('bsd,bsn->nd', z_img_float, attn_weights_float)
-                total_weights = attn_weights_float.sum(dim=(0, 1)).unsqueeze(-1) + 1e-5
+                # Einsum
+                slot_updates = torch.einsum('bsd,bsk->kd', z_img_safe, slot_masks)
+                slot_counts = slot_masks.sum(dim=(0, 1)).unsqueeze(-1) + 1e-5  # eps 안전장치
 
-                candidate_values = weighted_inputs / total_weights
-                if torch.isnan(candidate_values).any():
-                    candidate_values = torch.nan_to_num(candidate_values, nan=0.0)
+                new_slot_values = slot_updates / slot_counts
 
-                update_strength = torch.clamp(total_weights, max=1.0) * self.beta
+                # [Safety 3] 업데이트 값 검증
+                if torch.isnan(new_slot_values).any() or torch.isinf(new_slot_values).any():
+                    # 업데이트 값이 썩었으면 업데이트 취소 (기존 메모리 유지)
+                    new_slot_values = torch.nan_to_num(new_slot_values, nan=0.0)
+                    update_mask = torch.zeros_like(slot_counts)  # No update
+                else:
+                    # 유효한 슬롯만 업데이트
+                    update_mask = (slot_counts > 1e-5).float()
 
-                updated_mem = (1 - update_strength) * mem_float + \
-                              update_strength * candidate_values
+                # EMA Update (Float32로 수행 후 원본 버퍼에 저장)
+                updated_mem = (1 - self.beta) * mem_safe + \
+                              self.beta * new_slot_values * update_mask + \
+                              mem_safe * (1 - update_mask)
 
-                # 원본 버퍼(BFloat16일 수 있음)에 저장 시 dtype 복구
+                # 다시 버퍼에 넣을 때도 체크
                 self.memory_bank.data = updated_mem.to(dtype=self.memory_bank.dtype)
 
-        # 4. Fusion & Restore
-        # z_cog는 이미 BFloat16(Attention 출력)이므로 변환 불필요할 수 있으나 안전하게
-        z_cog = z_cog.to(dtype=z_img.dtype)
+        # 5. Fusion & Restore
+        # Float32 -> BFloat16 (원래 파이프라인 복귀)
+        z_cog = z_cog_safe.to(dtype=z_img.dtype)
+
+        # 혹시 모를 z_img의 오염 방지를 위해 z_img도 다시 cleaning할 수 있음
+        z_img = torch.nan_to_num(z_img, nan=0.0)
 
         z_concat = torch.cat([z_img, z_cog], dim=-1)
         z_fused = F.gelu(self.fusion(z_concat))

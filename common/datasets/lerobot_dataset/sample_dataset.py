@@ -85,7 +85,7 @@ if __name__ == '__main__':
     sample_target = list(range(0, 10))
     # directory to merge
     # target_dir = '/data/ghkim/concat_data/press_button_N_time'
-    target_dir = '/data/ghkim/data_hub/find_open_the_drawer_ep120'
+    target_dir = '/data/ghkim/concat_data/pick_place_press'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
@@ -93,23 +93,23 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
     ################### CHANGE TARGET DIRCTORY TOO !!!!!!!!!!!! #####################
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_BGR'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 0)
-    #
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_BRG'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 100)
-    #
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_GBR'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 200)
-    #
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_GRB'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 300)
-    #
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_RBG'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 400)
-    #
-    # data_dir = '/data/ghkim/concat_data/press_button_in_order/press_button_RGB'
-    # sample_dataset(list(range(0, 100)), data_dir, target_dir, 500)
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_BRW'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 0)
+
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_BWR'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 100)
+
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_RBW'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 200)
+
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_RWB'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 300)
+
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_WBR'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 400)
+
+    data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_WRB'
+    sample_dataset(list(range(0, 100)), data_dir, target_dir, 500)
     # data_dir = '/data/ghkim/press_the_button_hand/press_the_blue_button_hand/lerobot_5hz'
     # sample_dataset(sample_target, data_dir, target_dir, 20)
 

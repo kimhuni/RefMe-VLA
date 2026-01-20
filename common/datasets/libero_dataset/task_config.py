@@ -1,4 +1,4 @@
-TASKS_DICT = {
+LIBERO_TASKS_DICT = {
         '0' : "press the red button",
         '1' : "press the green button",
         '2' : "press the blue button",

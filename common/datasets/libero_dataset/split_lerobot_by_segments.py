@@ -11,9 +11,9 @@ import pandas as pd
 
 """
 python common/datasets/libero_dataset/split_lerobot_by_segments.py \
-  --src_root /data/ghkim/wipe_the_window_ep150 \
-  --segments /data/ghkim/wipe_the_window_ep150/segments.jsonl \
-  --out_root /data/ghkim/wipe_the_window_ep150_subtasks \
+  --src_root /data/libero-mem_lerobot_5hz \
+  --segments /data/libero-mem_lerobot_5hz/segments.jsonl \
+  --out_root /data/libero-mem_lerobot_5hz/subtasks \
   --fps 5.0 \
   --video_keys observation.images.table observation.images.wrist
 """

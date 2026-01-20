@@ -7,9 +7,9 @@ from collections import defaultdict
 
 """generate recipe -> generate per task -> sample_datasets (task index) -> meta
 python common/datasets/concat_dataset/generate_concat_recipe.py \
-  --task_episodes_json /home/ghkim/codes/RefMe-VLA/common/datasets/concat_dataset/episode_press_the_button.json \
-  --out_jsonl /data/ghkim/concat_data/press_button_in_order/press_button_GBR.jsonl \
-  --task_order "press the green button" "press the blue button" "press the red button" \
+  --task_episodes_json /home/ghkim/codes/RefMe-VLA/common/datasets/concat_dataset/episode_pick_place_press.json \
+  --out_jsonl /data/ghkim/concat_data/press_button_in_order/pick_place_press_WRB.jsonl \
+  --task_order "pick up the banana from the white plate and place it on the red plate" "press the orange button" "pick up the banana from the red plate and place it on the blue plate" \
   --n 100 \
   --seed 42 \
   --cap_per_episode 50
