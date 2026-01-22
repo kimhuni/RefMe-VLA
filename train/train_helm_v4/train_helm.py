@@ -30,20 +30,20 @@ from train.train_helm_v4.helm_dataset import (
 """
 export PYTHONPATH=$(pwd)
 # DDP Train #
-CUDA_VISIBLE_DEVICES=6,7
-    torchrun --nproc_per_node=2 train/train_helm_v4/train_helm.py \
+CUDA_VISIBLE_DEVICES=2,3
+    torchrun --nproc_per_node=2 --master-port=29545 train/train_helm_v4/train_helm.py \
         --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-        --train_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_train.jsonl \
-        --val_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_val.jsonl \
+        --train_jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/merged/all_train.jsonl \
+        --val_jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/merged/all_val.jsonl \
         --num_images 1 \
-        --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_DDP_0113 \
+        --output_dir /backups/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_DDP_0122 \
         --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
         --num_train_epochs 3 \
         --with_replacement True \
         --attn_impl sdpa \
         --eval_max_samples 40 \
         --wandb_project RefMe \
-        --wandb_run_name HLP_HeLM_v4_qwen_7b_all_DDP_0113
+        --wandb_run_name HLP_HeLM_v4_qwen_7b_all_DDP_0122
   
 # Qwen 3b model test #
 CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
@@ -61,19 +61,19 @@ CUDA_VISIBLE_DEVICES=2 python train/train_helm_v4/train_helm.py \
   --wandb_run_name HLP_HeLM_v4_qwen_3b_press_button_N_times
 
 # Qwen 7b mode
-CUDA_VISIBLE_DEVICES=3 python train/train_helm_v4/train_helm.py \
+CUDA_VISIBLE_DEVICES=4 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/helm_v4_task_10/merged/all_val.jsonl \
+  --train_jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/merged/all_val.jsonl \
   --num_images 1 \
-  --output_dir /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0115 \
+  --output_dir /backups/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_extended_0122 \
   --batch_size 8 --n_detect_pos 2 --n_detect_neg 2 --n_update_intra 2 --n_update_transition 2 \
   --num_train_epochs 3 \
   --with_replacement True \
   --attn_impl sdpa \
   --eval_max_samples 40 \
   --wandb_project RefMe \
-  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_0115
+  --wandb_run_name HLP_HeLM_v4_qwen_7b_all_extended_0122
   
 CUDA_VISIBLE_DEVICES=5 python train/train_helm_v4/train_helm.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
@@ -435,7 +435,7 @@ def main():
         bf16=bool(args.bf16),
         report_to=["wandb"],
         remove_unused_columns=False,
-        ddp_find_unused_parameters=False,
+        ddp_find_unused_parameters=True,
     )
 
     print_label_stats(args.train_jsonl)

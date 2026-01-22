@@ -7,19 +7,35 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import re
+from collections import defaultdict
+
 import pandas as pd
 
 """
 python common/datasets/libero_dataset/split_lerobot_by_segments.py \
   --src_root /data/libero-mem_lerobot_5hz \
-  --segments /data/libero-mem_lerobot_5hz/segments.jsonl \
-  --out_root /data/libero-mem_lerobot_5hz/subtasks \
+  --segments /data/libero-mem_lerobot_5hz/segments_1.jsonl \
+  --out_root /data/libero-mem_lerobot_5hz/subtasks_6 \
   --fps 5.0 \
-  --video_keys observation.images.table observation.images.wrist
+  --video_keys observation.images.table observation.images.wrist \
+  --src_chunk_size 1000 \
+  --out_chunk_size 50
 """
 
 def safe_mkdir(p: str):
     os.makedirs(p, exist_ok=True)
+
+def slugify(name: str) -> str:
+    """Make `name` safe for use as a directory name."""
+    name = (name or "").strip()
+    if not name:
+        return "unspecified"
+    # keep alnum, underscore, hyphen; convert spaces to underscores
+    name = name.replace(" ", "_")
+    name = re.sub(r"[^A-Za-z0-9_\-]+", "_", name)
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name or "unspecified"
 
 
 def read_jsonl(path: str):
@@ -43,8 +59,8 @@ def episode_video_path(dataset_root: str, episode_index: int, video_key: str, ch
     return os.path.join(dataset_root, f"videos/chunk-{chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4")
 
 
-def write_episode_parquet(df: pd.DataFrame, out_root: str, new_episode_index: int, chunk_size: int = 1000):
-    chunk = new_episode_index // chunk_size
+def write_episode_parquet(df: pd.DataFrame, out_root: str, new_episode_index: int, out_chunk_size: int = 50):
+    chunk = new_episode_index // out_chunk_size
     out_dir = os.path.join(out_root, f"data/chunk-{chunk:03d}")
     safe_mkdir(out_dir)
     out_path = os.path.join(out_dir, f"episode_{new_episode_index:06d}.parquet")
@@ -116,7 +132,8 @@ def main(
     out_root: str,
     fps: float = 5.0,
     video_keys=("observation.images.table", "observation.images.wrist"),
-    chunk_size: int = 1000,
+    src_chunk_size: int = 1000,
+    out_chunk_size: int = 50,
     drop_last_frame: bool = True,
     reencode_video: bool = True,
 ):
@@ -125,8 +142,8 @@ def main(
     if not segs:
         raise RuntimeError(f"No segments found in {segments_jsonl}")
 
-    # Assign new episode indices sequentially
-    new_ep = 0
+    # Assign new episode indices per-subtask (so indices won't collide inside each subtask folder)
+    subtask_counters = defaultdict(int)
     manifest = []  # keep mapping for later (debug / TaskSpec linking)
 
     for s in segs:
@@ -137,11 +154,20 @@ def main(
         subtask = s.get("subtask", "")
         event_frame_idxs = s.get("event_frame_idxs", [])
 
+        subtask_dir = slugify(subtask)
+        sub_out_root = os.path.join(out_root, subtask_dir)
+        safe_mkdir(sub_out_root)
+
+        # episode index local to this subtask directory
+        # Reserve the index immediately so later failures don't cause repeated writes to episode_000000
+        new_ep = int(subtask_counters[subtask_dir])
+        subtask_counters[subtask_dir] += 1
+
         if end <= start:
             print(f"[SKIP] invalid range: ep={parent_ep} seg={seg_id} {start}-{end}")
             continue
 
-        parquet_path = episode_parquet_path(src_root, parent_ep, chunk_size=chunk_size)
+        parquet_path = episode_parquet_path(src_root, parent_ep, chunk_size=src_chunk_size)
         if not os.path.exists(parquet_path):
             print(f"[SKIP] missing parquet: {parquet_path}")
             continue
@@ -164,7 +190,7 @@ def main(
             continue
 
         seg_df = normalize_segment_df(seg_df, new_episode_index=new_ep)
-        out_parquet = write_episode_parquet(seg_df, out_root, new_episode_index=new_ep, chunk_size=chunk_size)
+        out_parquet = write_episode_parquet(seg_df, sub_out_root, new_episode_index=new_ep, out_chunk_size=out_chunk_size)
 
         # Cut videos
         # Convert frame to seconds
@@ -173,19 +199,20 @@ def main(
         dur_sec = len(seg_df) / float(fps)
 
         for vk in video_keys:
-            in_vid = episode_video_path(src_root, parent_ep, vk, chunk_size=chunk_size)
+            in_vid = episode_video_path(src_root, parent_ep, vk, chunk_size=src_chunk_size)
             if not os.path.exists(in_vid):
                 print(f"[WARN] missing video: {in_vid}")
                 continue
 
-            out_chunk = new_ep // chunk_size
-            out_vid_dir = os.path.join(out_root, f"videos/chunk-{out_chunk:03d}/{vk}")
+            out_chunk = new_ep // out_chunk_size
+            out_vid_dir = os.path.join(sub_out_root, f"videos/chunk-{out_chunk:03d}/{vk}")
             safe_mkdir(out_vid_dir)
             out_vid = os.path.join(out_vid_dir, f"episode_{new_ep:06d}.mp4")
 
             ffmpeg_cut_video(in_vid, out_vid, start_sec=start_sec, dur_sec=dur_sec, reencode=reencode_video)
 
         manifest.append({
+            "subtask_dir": subtask_dir,
             "new_episode_index": new_ep,
             "parent_episode_id": parent_ep,
             "segment_id": seg_id,
@@ -195,9 +222,9 @@ def main(
             "event_frame_idxs": event_frame_idxs,
             "out_parquet": os.path.relpath(out_parquet, out_root),
         })
-        print(f"[OK] new_ep={new_ep:06d} from parent_ep={parent_ep:06d} seg={seg_id} frames={len(seg_df)} subtask={subtask}")
-
-        new_ep += 1
+        print(
+            f"[OK] subtask={subtask_dir} new_ep={new_ep:06d} from parent_ep={parent_ep:06d} seg={seg_id} frames={len(seg_df)}"
+        )
 
     # Save manifest for debugging / TaskSpec episode_filters 연결용
     manifest_path = os.path.join(out_root, "split_manifest.json")
@@ -214,7 +241,8 @@ if __name__ == "__main__":
     ap.add_argument("--segments", type=str, required=True, help="segments.jsonl")
     ap.add_argument("--out_root", type=str, required=True)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--chunk_size", type=int, default=1000)
+    ap.add_argument("--src_chunk_size", type=int, default=1000)
+    ap.add_argument("--out_chunk_size", type=int, default=50)
     ap.add_argument("--drop_last_frame", action="store_true", default=True)
     ap.add_argument("--no_drop_last_frame", action="store_false", dest="drop_last_frame")
     ap.add_argument("--reencode_video", action="store_true", default=True)
@@ -229,7 +257,8 @@ if __name__ == "__main__":
         out_root=args.out_root,
         fps=args.fps,
         video_keys=tuple(args.video_keys),
-        chunk_size=args.chunk_size,
+        src_chunk_size=args.src_chunk_size,
+        out_chunk_size=args.out_chunk_size,
         drop_last_frame=args.drop_last_frame,
         reencode_video=args.reencode_video,
     )

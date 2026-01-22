@@ -4,7 +4,7 @@
   "intra": [2, 1],
   "task_text": [
     "pick and place the banana from the red plate to the blue plate, then from the blue plate to the white plate",
-    "pick and place the banana back to its original plate"
+    "pick and place the banana from current plate to its original plate"
   ],
   "episode_filters": [
     [
@@ -15,14 +15,15 @@
       { "tasks": "pick up the banana from the white plate and place it on the red plate" }
     ]
   ],
-  "event_list": "banana moved red to blue\nbanana moved blue to white\nbanana moved white to red\ndone",
+  "llp_commands": "pick up the banana from the blue plate and place it on the red plate\npick up the banana from the blue plate and place it on the white plate\npick up the banana from the red plate and place it on the blue plate\npick up the banana from the red plate and place it on the white plate\npick up the banana from the white plate and place it on the blue plate\npick up the banana from the white plate and place it on the red plate\ndone",
+  "event_list": "banana moved to white\nbanana moved to red\nbanana moved to blue\ndone",
   "event_grid": [
     [
-      "banana moved red to blue",
-      "banana moved blue to white"
+      "banana moved to blue",
+      "banana moved to white"
     ],
     [
-      "banana moved white to red"
+      "banana moved to red"
     ]
   ],
   "memory_grid": [

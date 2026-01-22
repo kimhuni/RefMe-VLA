@@ -1,0 +1,48 @@
+{
+  "task_id": "liftput_bowl_3",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "lift the bowl and place it back on the plate 3 times"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "lift and place the bowl" },
+      { "tasks": "lift and place the bowl" },
+      { "tasks": "lift and place the bowl" }
+    ]
+  ],
+  "llp_commands": "bowl lift and placed\n",
+  "event_list": "bowl lift and placed\n",
+  "event_grid": [
+    [
+      "bowl lift and placed",
+      "bowl lift and placed",
+      "bowl lift and placed"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "bowl lift and placed",
+        "Working_Memory": "Count: 0 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "lift and place the bowl",
+        "Working_Memory": "Count: 1 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "lift and place the bowl",
+        "Working_Memory": "Count: 2 (Goal: 3)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Count: 3"
+      }
+    ]
+  ]
+}

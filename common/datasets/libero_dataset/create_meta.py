@@ -527,7 +527,7 @@ def create_meta(root_dir, episodes):
         for entry in tasks:
             json.dump(entry, f)
             f.write("\n")
-    """
+
     stacked_action = np.stack(action_df, axis=0)
     #stacked_action_joint = np.stack(action_joint_df, axis=0)
     stacked_observation_state = np.stack(observation_state_df, axis=0)
@@ -619,8 +619,9 @@ def create_meta(root_dir, episodes):
 
     with open(os.path.join(root_dir,"meta/stats.json"),"w") as f:
         json.dump(stats,f,indent=4)
+
         
-    """
+
 
     print("created all meta files")
 
@@ -631,9 +632,30 @@ if __name__ == "__main__":
     #episodes = 20
     #create_meta(root_dir, episodes)
 
-    root_dir = "/data/ghkim/concat_data/pick_place_press"
-    episodes = 600
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/liftput_bottle_ep20"
+    episodes = 20
     create_meta(root_dir, episodes)
+
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/liftput_bowl_ep20"
+    episodes = 20
+    create_meta(root_dir, episodes)
+
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/pickplace_basket_left_ep20"
+    episodes = 20
+    create_meta(root_dir, episodes)
+
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/pickplace_basket_right_ep20"
+    episodes = 20
+    create_meta(root_dir, episodes)
+
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/pickplace_creamcheese_left_ep20"
+    episodes = 20
+    create_meta(root_dir, episodes)
+
+    root_dir = "/data/libero-mem_lerobot_5hz/ep20/pickplace_creamcheese_right_ep20"
+    episodes = 20
+    create_meta(root_dir, episodes)
+
 
     # root_dir = "/data/ghkim/press the green button/lerobot_5hz"
     # episodes = 20

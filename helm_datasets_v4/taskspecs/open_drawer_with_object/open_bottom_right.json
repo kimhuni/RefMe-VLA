@@ -3,22 +3,22 @@
   "inter": 1,
   "intra": [1, 1],
   "task_text": [
-    "observe in which drawer the hamburger is located",
-    "find the drawer with hamburger"
+    "observe in which drawer the orange toy is located",
+    "based on Episodic_Context, find the drawer with orange toy"
   ],
   "episode_filters": [
     [
-      { "tasks": "observe hamburger location: bottom right drawer" }
+      { "tasks": "open the bottom right drawer" }
     ],
     [
       { "tasks": "open the bottom right drawer" }
     ]
   ],
   "llp_commands": "wait\nopen the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
-  "event_list": "hamburger located at bottom left drawer\nhamburger located at bottom right drawer\nhamburger located at top left drawer\nhamburger located at top right drawer\nbottom left drawer opened\nbottom right drawer opened\ntop left drawer opened\ntop right drawer opened\ndone",
+  "event_list": "orange toy located at bottom left drawer\norange toy located at bottom right drawer\norange toy located at top left drawer\norange toy located at top right drawer\nbottom left drawer opened\nbottom right drawer opened\ntop left drawer opened\ntop right drawer opened\ndone",
   "event_grid": [
     [
-      "hamburger located at bottom right drawer"
+      "orange toy located at bottom right drawer"
     ],
     [
       "bottom right drawer opened"

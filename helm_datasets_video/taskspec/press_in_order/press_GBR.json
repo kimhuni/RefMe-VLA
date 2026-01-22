@@ -1,0 +1,32 @@
+{
+  "task_id": "press_GBR",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "press the green, blue, red buttons in order"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "press the green button" },
+      { "tasks": "press the blue button" },
+      { "tasks": "press the red button" }
+    ]
+  ],
+  "llp_commands": "press the green button\npress the blue button\npress the red button\ndone",
+  "event_list": "green button pressed\nblue button pressed\nred button pressed\ndone",
+  "event_grid": [
+    [
+      "green button pressed",
+      "blue button pressed",
+      "red button pressed"
+    ]
+  ],
+  "memory_grid": [
+    [
+      { "description": "Step 0: Start -> Should press Green", "Action_Command": "press the green button" },
+      { "description": "Step 1: Green Done -> Should press Blue", "Action_Command": "press the blue button" },
+      { "description": "Step 2: Blue Done -> Should press Red", "Action_Command": "press the red button" },
+      { "description": "Step 3: Red Done -> Finish", "Action_Command": "done" }
+    ]
+  ]
+}

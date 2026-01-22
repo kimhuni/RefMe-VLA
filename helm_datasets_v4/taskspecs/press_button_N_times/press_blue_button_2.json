@@ -13,8 +13,8 @@
       {"tasks": "press the blue button"}
     ]
   ],
-  "llp_commands": "press the blue button\n done",
-  "event_list": "blue button pressed\n done",
+  "llp_commands": "press the blue button\ndone",
+  "event_list": "blue button pressed\ndone",
   "event_grid": [
     [
       "blue button pressed",
@@ -36,7 +36,7 @@
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Total: 2"
+        "Episodic_Context": "Previous_Count: 2"
       }
     ]
   ]

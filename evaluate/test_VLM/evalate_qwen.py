@@ -1,5 +1,6 @@
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, AutoProcessor
 from qwen_vl_utils import process_vision_info
+import torch
 
 # default: Load the model on the available device(s)
 local_dir = "/ckpt/Qwen2.5-VL-7B-Instruct"
@@ -28,31 +29,47 @@ processor = AutoProcessor.from_pretrained(local_dir, local_files_only=True)
 # max_pixels = 1280*28*28
 # processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", min_pixels=min_pixels, max_pixels=max_pixels)
 
-IMAGE_PATH = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000034.jpg"
+# IMAGE_PATH = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000034.jpg"
+# IMAGE_PATH_2 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000025.jpg"
+# IMAGE_PATH_3 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000000.jpg"
+# IMAGE_PATH_4 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000008.jpg"
+# IMAGE_PATH_5 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000028.jpg"
+# IMAGE_PATH_6 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000018.jpg"
+# IMAGE_PATH_7 = "/data/ghkim/helm_data/find_object_in_drawer/frames_5hz/chunk-002/episode_000100/table/frame_000012.jpg"
+#
+# USER_PROMPT = "According to the provided images, is there a hamburger in the drawer or is it empty? Explain what is in the drawer"
 
-USER_PROMPT = "Is there a hamburger in the drawer or is it empty? Explain what is in the drawer"
+IMAGE_PATH_1 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000000/table/frame_000039.jpg" # press blue
+IMAGE_PATH_2 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000031/table/frame_000034.jpg" # press green
+IMAGE_PATH_3 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000046/table/frame_000032.jpg" # press red
+IMAGE_PATH_4 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000000/table/frame_000039.jpg" # press blue
+IMAGE_PATH_5 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000031/table/frame_000034.jpg" # press green
+IMAGE_PATH_6 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000046/table/frame_000032.jpg" # press red
+IMAGE_PATH_7 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000000/table/frame_000039.jpg" # press blue
+IMAGE_PATH_8 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000031/table/frame_000034.jpg" # press green
+IMAGE_PATH_9 = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000046/table/frame_000032.jpg" # press red
+
+IMAGE_PATH_B = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000000/table/frame_000039.jpg" # press blue
+IMAGE_PATH_G = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000031/table/frame_000034.jpg" # press green
+IMAGE_PATH_R = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000/episode_000046/table/frame_000032.jpg" # press red
+
 # USER_PROMPT = (
-#     "You are an expert in robotic manipulation image analysis."
-#     "You are given:"
-#     "1. A task description of what the robot should do."
-#     "2. A previous output describing the last frame’s action and task status (frames are 1 s apart)."
-#     "3. A current image showing the new scene."
-#     "Describe what the robot arm is doing in the current image, and judge whether the task is done."
-#
-#     "Rules: Write exactly two sentences:"
-#     "1. What the robot is doing in this image."
-#     "2. Whether the task is done, not done, or uncertain."
-#     "- Base your judgment only on visible evidence. Use the previous output only for continuity, not as proof."
-#     "- Say “done” only if direct contact or clear result is visible:"
-#     "  - Pressing → gripper visibly pressing or deforming button  "
-#     "  - Placing → object released and stationary at target  "
-#     "  - Grasping → object fully held in closed gripper"
-#     "- If evidence is unclear, mark “not done” or “uncertain.”"
-#     "- Use concise visual verbs: moving, grasping, placing, pressing, releasing, returning."
-#
-#     "Task: Press the blue button on the table."
-#     "Previous description: The robot's gripper is in contact with the blue button, indicating that it is attempting to press it. The task is not done as the button is still not visibly depressed."
+#   "The images are in time order (Image 1,2,3,4,5,6). \n"
+#   "For EACH image, exactly identify the color of the button being pressed.\n"
+#   "Return one line in this EXACT format:\n"
+#   "Final sequence: {image1 : <c1>, image2 : <c2>, image3 : <c3>, image4 : <c4>, image5 : <c5>, image6 : <c6>}\n"
+#   "Use only: red, green, blue for the color. No other text."
 # )
+
+# USER_PROMPT = (
+#   "The images show a robot arm pressing either red, green, blue button.\n"
+#   "The images are in time order (Image 1,2,3,4). \n"
+#   "For EACH image, exactly identify the color of the button being pressed.\n"
+#   "Return one line in this EXACT format:\n"
+#   "image1 : <c1>, image2 : <c2>, image3 : <c3>, image4 : <c4>\n"
+#   "Use only: red, blue, green for the color. No other text."
+# )
+
 
 # USER_PROMPT = (
 #     "You are an expert in robotic manipulation image analysis."
@@ -77,8 +94,40 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": IMAGE_PATH,
+                "image": IMAGE_PATH_1,
             },
+            {
+                "type": "image",
+                "image": IMAGE_PATH_2,
+            },
+            {
+                "type": "image",
+                "image": IMAGE_PATH_3,
+            },
+            {
+                "type": "image",
+                "image": IMAGE_PATH_4,
+            },
+            # {
+            #     "type": "image",
+            #     "image": IMAGE_PATH_5,
+            # },
+            # {
+            #     "type": "image",
+            #     "image": IMAGE_PATH_6,
+            # },
+            # {
+            #     "type": "image",
+            #     "image": IMAGE_PATH_7,
+            # },
+            # {
+            #     "type": "image",
+            #     "image": IMAGE_PATH_8,
+            # },
+            # {
+            #     "type": "image",
+            #     "image": IMAGE_PATH_9,
+            # },
             {
                 "type": "text",
                 "text": USER_PROMPT,
@@ -87,31 +136,59 @@ messages = [
     }
 ]
 
-# Preparation for inference
-text = processor.apply_chat_template(
-    messages, tokenize=False, add_generation_prompt=True
-)
-image_inputs, video_inputs = process_vision_info(messages)
-inputs = processor(
-    text=[text],
-    images=image_inputs,
-    videos=video_inputs,
-    padding=True,
-    return_tensors="pt",
-)
-inputs = inputs.to("cuda")
+# Preparation for inference (run 10 times and measure pure inference time)
+import time
 
-# Inference: Generation of the output
-generated_ids = model.generate(**inputs, max_new_tokens=128, do_sample=False)
-generated_ids_trimmed = [
-    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-]
-output_text = processor.batch_decode(
-    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-)
+times = []
 
-print(IMAGE_PATH)
-print("output text: ", output_text)
+for i in range(5):
+    start = time.time()
+
+    text = processor.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    image_inputs, video_inputs = process_vision_info(messages)
+    inputs = processor(
+        text=[text],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+    inputs = inputs.to("cuda")
+
+    # print("seq_len:", inputs.input_ids.shape[-1])
+    # if hasattr(inputs, "image_grid_thw"):
+    #     print("image_grid_thw:", inputs.image_grid_thw)
+
+    # Fix output length to exactly N new tokens (so runtime is comparable across different image counts)
+    GEN_NEW_TOKENS = 256
+
+    generated_ids = model.generate(
+        **inputs,
+        do_sample=False,
+        max_new_tokens=GEN_NEW_TOKENS,
+    )
+    generated_ids_trimmed = [
+        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+    ]
+    # Actual number of generated tokens (after trimming the prompt)
+    print("gen_new_tokens:", generated_ids_trimmed[0].numel())
+    output_text = processor.batch_decode(
+        generated_ids_trimmed,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
+    )
+
+    torch.cuda.synchronize()
+    elapsed = time.time() - start
+    times.append(elapsed)
+
+    print(" - generated text: ", output_text)
+
+    print(f"[Run {i+1}] inference time: {elapsed:.4f} sec--------------------------------------")
+
+# print(f"Average inference time over 10 runs: {sum(times)/len(times):.4f} sec")
 
 
 # image save

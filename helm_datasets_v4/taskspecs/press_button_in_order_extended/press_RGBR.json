@@ -1,12 +1,13 @@
 {
   "task_id": "press_RGBR",
   "inter": 0,
-  "intra": [9],
+  "intra": [4],
   "task_text": ["press the red, green, blue, red buttons in order"],
   "episode_filters": [
     [
-      { "tasks": "press the blue button" },
+      { "tasks": "press the red button" },
       { "tasks": "press the green button" },
+      { "tasks": "press the blue button" },
       { "tasks": "press the red button" }
     ]
   ],
@@ -14,32 +15,38 @@
   "event_list": "blue button pressed\ngreen button pressed\nred button pressed\ndone",
   "event_grid": [
     [
-      "blue button pressed",
+      "red button pressed",
       "green button pressed",
+      "blue button pressed",
       "red button pressed"
     ]
   ],
   "memory_grid": [
     [
       {
-        "Action_Command": "press the blue button",
-        "Working_Memory": "Progress: none (Goal: blue, green, red)",
+        "Action_Command": "press the red button",
+        "Working_Memory": "Progress: none (Goal: red, green, blue, red)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the green button",
-        "Working_Memory": "Progress: blue (Goal: blue, green, red)",
+        "Working_Memory": "Progress: red (Goal: red, green, blue, red)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Progress: red, green (Goal: red, green, blue, red)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the red button",
-        "Working_Memory": "Progress: blue, green (Goal: blue, green, red)",
+        "Working_Memory": "Progress: red, green, blue (Goal: red, green, blue, red)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Progress: blue, green, red"
+        "Episodic_Context": "Previous_Progress: red, green, blue, red"
       }
     ]
   ]

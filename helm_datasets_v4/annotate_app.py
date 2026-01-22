@@ -18,7 +18,7 @@ from helm_datasets_v3.utils.io_utils import (
 """
 export PYTHONPATH=$(pwd)
 streamlit run helm_datasets_v3/annotate_app.py --\
-    --out_root "/data/ghkim/helm_data/press_button_in_human_order" \
+    --out_root "/data/ghkim/helm_data/pick_place_press" \
     --fps_frames 5
 """
 

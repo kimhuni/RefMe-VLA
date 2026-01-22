@@ -3,7 +3,7 @@
   "inter": 0,
   "intra": [3],
   "task_text": [
-    "pick and place the banana from the red plate to the white plate, then from the white plate to the blue plate, pressing the orange button in between"
+    "pick and place the banana from the red plate to the white plate, press the orange button, and then pick and place the banana from the white plate to the blue plate"
   ],
   "episode_filters": [
     [
@@ -13,12 +13,12 @@
     ]
   ],
   "llp_commands": "pick up the banana from the blue plate and place it on the red plate\npick up the banana from the blue plate and place it on the white plate\npick up the banana from the red plate and place it on the blue plate\npick up the banana from the red plate and place it on the white plate\npick up the banana from the white plate and place it on the blue plate\npick up the banana from the white plate and place it on the red plate\npress the orange button\ndone",
-  "event_list": "banana moved red to white\norange button pressed\nbanana moved white to blue\ndone",
+  "event_list": "banana moved to white\norange button pressed\nbanana moved to blue\ndone",
   "event_grid": [
     [
-      "banana moved red to white",
+      "banana moved to white",
       "orange button pressed",
-      "banana moved white to blue"
+      "banana moved to blue"
     ]
   ],
   "memory_grid": [
@@ -41,7 +41,7 @@
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Progress: red_to_white, press_orange, white_to_blue"
+        "Episodic_Context": "Previous_Progress: origin_red, red_to_white, press_orange, white_to_blue"
       }
     ]
   ]

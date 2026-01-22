@@ -1,0 +1,41 @@
+{
+  "task_id": "put_creamcheese_left_left",
+  "inter": 0,
+  "intra": [2],
+  "task_text": [
+    "put the cream cheese in the nearest basket and place that basket in the center"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "pick and place the block into the left basket" },
+      { "tasks": "move the left basket forward" }
+    ]
+  ],
+  "llp_commands": "bowl lift and placed\n",
+  "event_list": "bowl lift and placed\n",
+  "event_grid": [
+    [
+      "block place in left basket",
+      "left basket moved"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "pick and place the block into the left basket",
+        "Working_Memory": "Progress: None (Goal: left, left)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "move the left basket forward",
+        "Working_Memory": "Count: left (Goal: left, left)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: left, left"
+      }
+    ]
+  ]
+}

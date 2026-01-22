@@ -153,6 +153,32 @@ class PreTrainedPolicy(HubMixin, HFPreTrainedModel, abc.ABC):
                     model.to(map_location)
             else:
                 safetensors.torch.load_model(model, model_file, strict=strict, device=map_location)
+                # ckpt = load_file(model_file, device=map_location)  # <= map_location 대신 device를 그대로 쓰면 됨
+                # model_sd = model.state_dict()
+                #
+                # dropped = []
+                # for k in list(ckpt.keys()):
+                #     if k in model_sd and tuple(ckpt[k].shape) != tuple(model_sd[k].shape):
+                #         dropped.append((k, tuple(ckpt[k].shape), tuple(model_sd[k].shape)))
+                #         ckpt.pop(k)
+                #
+                # if dropped:
+                #     msg = "\n".join([f"  - {k}: ckpt{a} != model{b}" for k, a, b in dropped])
+                #     if strict:
+                #         # strict=True면 원래처럼 fail-fast 하고 싶을 수도 있으니 에러로
+                #         raise RuntimeError("[ckpt] Shape mismatch keys found:\n" + msg)
+                #     else:
+                #         print("[ckpt] Dropped mismatched keys:\n" + msg)
+                #
+                # missing, unexpected = model.load_state_dict(ckpt, strict=False)
+                #
+                # # (옵션) 로깅
+                # if missing:
+                #     print(f"[ckpt] missing keys: {len(missing)} (showing up to 10)")
+                #     print("  ", missing[:10])
+                # if unexpected:
+                #     print(f"[ckpt] unexpected keys: {len(unexpected)} (showing up to 10)")
+                #     print("  ", unexpected[:10])
         else:
             state_dict = torch.load(model_file, map_location=map_location)
             model.load_state_dict(state_dict)

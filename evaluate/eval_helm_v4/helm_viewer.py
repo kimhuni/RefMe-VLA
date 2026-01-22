@@ -7,6 +7,8 @@ from PIL import Image
 
 """
 streamlit run evaluate/eval_helm_v3/helm_viewer.py
+
+/data/ghkim/helm_data/result/HLP_HeLM_v4_qwen_7b_all_0115/eval_PPP.jsonl
 """
 
 # -----------------------------

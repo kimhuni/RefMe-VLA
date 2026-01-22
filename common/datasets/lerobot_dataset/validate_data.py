@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 """
-python common/datasets/lerobot_dataset/validate_data.py --root /data/ghkim/lerobot_data/open_the_drawer_ep200
+python common/datasets/lerobot_dataset/validate_data.py --root /data/libero-mem_lerobot_5hz/subtasks_6
 """
 
 

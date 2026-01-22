@@ -1,12 +1,16 @@
 {
   "task_id": "press_blue_button_8",
   "inter": 0,
-  "intra": [6],
+  "intra": [8],
   "task_text": [
     "press the blue button eight times"
   ],
   "episode_filters": [
     [
+      { "tasks": "press the blue button" },
+      { "tasks": "press the blue button" },
+      { "tasks": "press the blue button" },
+      { "tasks": "press the blue button" },
       { "tasks": "press the blue button" },
       { "tasks": "press the blue button" },
       { "tasks": "press the blue button" },
@@ -20,6 +24,10 @@
       "blue button pressed",
       "blue button pressed",
       "blue button pressed",
+      "blue button pressed",
+      "blue button pressed",
+      "blue button pressed",
+      "blue button pressed",
       "blue button pressed"
     ]
   ],
@@ -27,23 +35,48 @@
     [
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 0 (Goal: 3)",
+        "Working_Memory": "Count: 0 (Goal: 8)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 1 (Goal: 3)",
+        "Working_Memory": "Count: 1 (Goal: 8)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 2 (Goal: 3)",
+        "Working_Memory": "Count: 2 (Goal: 8)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 3 (Goal: 8)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 4 (Goal: 8)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 5 (Goal: 8)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 6 (Goal: 8)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 7 (Goal: 8)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Count: 3"
+        "Episodic_Context": "Previous_Count: 8"
       }
     ]
   ]

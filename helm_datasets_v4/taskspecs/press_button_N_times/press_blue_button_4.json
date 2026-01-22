@@ -27,23 +27,28 @@
     [
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 0 (Goal: 3)",
+        "Working_Memory": "Count: 0 (Goal: 4)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 1 (Goal: 3)",
+        "Working_Memory": "Count: 1 (Goal: 4)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "press the blue button",
-        "Working_Memory": "Count: 2 (Goal: 3)",
+        "Working_Memory": "Count: 2 (Goal: 4)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Count: 3 (Goal: 4)",
         "Episodic_Context": "None"
       },
       {
         "Action_Command": "done",
         "Working_Memory": "task done (None)",
-        "Episodic_Context": "Previous_Count: 3"
+        "Episodic_Context": "Previous_Count: 4"
       }
     ]
   ]
