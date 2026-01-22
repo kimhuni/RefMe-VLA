@@ -44,6 +44,22 @@ from utils_video_batches import (
 
 logger = logging.getLogger(__name__)
 
+def concat_images_horizontally(pil_images):
+    # PIL → numpy
+    imgs = [np.array(img) for img in pil_images]
+
+    # 높이를 맞추기 (최대 높이 기준)
+    max_h = max(img.shape[0] for img in imgs)
+
+    padded_imgs = []
+    for img in imgs:
+        h, w, c = img.shape
+        if h < max_h:
+            pad = np.zeros((max_h - h, w, c), dtype=img.dtype)
+            img = np.vstack([img, pad])
+        padded_imgs.append(img)
+
+    return np.hstack(padded_imgs)
 
 # --- Helper for parsing simplified Update output ---
 def parse_video_update_yaml(text: str) -> str:
@@ -113,7 +129,7 @@ def eval_video_real_time_main(
         specs: Dict[str, Any],
         task_group: str = "1",
 ):
-    llp_ctx = init_llp_runtime(llp_cfg)
+    llp_ctx: LLPRuntimeContext = init_llp_runtime(llp_cfg)
     listener, kstate = init_keyboard_listener(task_group)
 
     # --- Runtime State for Video HeLM ---
@@ -163,10 +179,12 @@ def eval_video_real_time_main(
                     _, obs_img_t, _ = capture_shared_observation(
                         llp_ctx.piper, llp_ctx.table_rs_cam, llp_ctx.wrist_rs_cam, llp_ctx.cfg.use_devices
                     )
-                    obs_pil = _to_pil_from_tensor(obs_img_t) if obs_img_t is not None else _make_dummy_image()[0]
+                    obs_pil = _to_pil_from_tensor(obs_img_t) if obs_img_t is not None else _make_dummy_image()
 
                     # Init Memory: [StartFrame]
                     visual_memory = [obs_pil]
+
+                    logger.info(f"[Update] Initial update ...")
 
                     # Initial Update
                     current_action, dt = run_video_update(
@@ -196,7 +214,8 @@ def eval_video_real_time_main(
 
             # Idle Check
             if current_task_id is None:
-                time.sleep(0.1)
+                print("nothing to do")
+                time.sleep(2)
                 continue
 
             # 4. Main Loop
@@ -209,6 +228,12 @@ def eval_video_real_time_main(
             obs_pil = _to_pil_from_tensor(obs_img_t)
             # Optional: Debug View
             # plt.imshow(obs_pil); plt.show()
+
+            plt.figure()
+            plt.imshow(obs_pil)
+            plt.title(f"[UPDATE] image for debug | table step={step}")
+            plt.axis("off")
+            plt.show()
 
             # A. DETECT (Current Frame)
             spec = specs[current_task_id]
@@ -223,6 +248,15 @@ def eval_video_real_time_main(
 
                 # Add Keyframe to Memory
                 visual_memory.append(obs_pil)
+
+                # DEBUG Update image batch
+                concat_img = concat_images_horizontally(visual_memory)
+                plt.figure(figsize=(20, 5))
+                plt.imshow(concat_img)
+                plt.title(f"[UPDATE] visual memory ({len(visual_memory)} frames)")
+                plt.axis("off")
+                plt.show()
+
                 logger.info(f"[MEMORY] History Size: {len(visual_memory)}")
 
                 # Predict Next Action
@@ -247,6 +281,8 @@ def eval_video_real_time_main(
             else:
                 pass  # Idle
 
+            logger.info(f"--------------------------------[Main] Loop done --------------------------------------")
+
             step += 1
 
     finally:
@@ -266,7 +302,7 @@ if __name__ == "__main__":
     p.add_argument("--llp_model_path", type=str, required=True)
     p.add_argument("--dataset_root", type=str, default=None)
     p.add_argument("--dataset_repo_id", type=str, default=None)
-    p.add_argument("--use_devices", action="store_true")
+    p.add_argument("--use_devices", default=True, action="store_true")
     args = p.parse_args()
 
     # Load Specs
