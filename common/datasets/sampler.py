@@ -84,6 +84,7 @@ class EpisodeAwareBatchSampler:
         seed: int = 0,
         allow_cross_episode_fill: bool = True,
         drop_last: bool = False,
+        stride: int = 10,
     ):
         if batch_size <= 0:
             raise ValueError("batch_size must be > 0")
@@ -103,7 +104,8 @@ class EpisodeAwareBatchSampler:
             s = int(episode_data_index["from"][e].item()) + int(drop_n_first_frames)
             t = int(episode_data_index["to"][e].item()) - int(drop_n_last_frames)
             if t > s:
-                self.episodes.append(list(range(s, t)))
+                # self.episodes.append(list(range(s, t)))
+                self.episodes.append(list(range(s, t, stride)))
 
         self.shuffle_episodes = bool(shuffle_episodes)
         self.seed = int(seed)

@@ -29,12 +29,12 @@ from peft import PeftModel
 logger = logging.getLogger("eval_helm_v3")
 
 """
-CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_v4/eval_helm_hlp_v4.py \
-  --jsonl /data/ghkim/helm_data/pick_place_press/jsonl_v4/merged/all_val.jsonl \
+CUDA_VISIBLE_DEVICES=7 python evaluate/eval_helm_v4/eval_helm_hlp_v4.py \
+  --jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter /result/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_0115/checkpoint-3000 \
+  --adapter /backups/ghkim/HeLM_v4/HLP_HeLM_v4_qwen_7b_all_extended_0122/checkpoint-3000 \
   --max_samples 200 --seed 123 \
-  --out_jsonl /data/ghkim/helm_data/result/HLP_HeLM_v4_qwen_7b_all_0115/eval_PPP.jsonl
+  --out_jsonl /data/ghkim/helm_data/helm_v4_task_10_extended/eval_3000.jsonl
   
 CUDA_VISIBLE_DEVICES=2 python evaluate/eval_helm_v3/eval_helm_hlp_v4.py \
   --jsonl /data/ghkim/helm_data/press_the_button_nolight/jsonl_v3/merged/all_val.jsonl \

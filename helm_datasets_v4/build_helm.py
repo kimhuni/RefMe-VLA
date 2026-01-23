@@ -18,8 +18,17 @@ from helm_datasets_v4.core.templates import dump_yaml, make_detect_prompt, make_
 export PYTHONPATH=$(pwd)
 python -m helm_datasets_v4.build_helm \
   --data_root "/data/ghkim/helm_data/open_drawer_with_object" \
-  --out_root "/data/ghkim/helm_data/helm_v4_task_10" \
+  --out_root "/data/ghkim/helm_data/helm_v4_task_10_extended_re" \
   --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/open_drawer_with_object" \
+  --fps_out 5 \
+  --n_images 1 \
+  --val_ratio 0.1 \
+  --shard_size 5000
+  
+python -m helm_datasets_v4.build_helm \
+  --data_root "/data/ghkim/helm_data/pick_place_press" \
+  --out_root="/data/ghkim/helm_data/helm_v4_task_10_extended_re" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/pick_place_press" \
   --fps_out 5 \
   --n_images 1 \
   --val_ratio 0.1 \
@@ -65,6 +74,8 @@ def episode_matches_filter(ep_meta: Dict[str, Any], flt: Dict[str, Any]) -> bool
     for k, v in flt.items():
         if ep_meta.get(k) != v:
             return False
+        if v == "press the orange button":
+            print("finding: ", ep_meta.get(k))
     return True
 
 
@@ -380,7 +391,16 @@ def build_for_task(
                 flt = spec.episode_filters[inter_idx][step_idx]
                 for ep in eps:
                     if not episode_matches_filter(ep.meta, flt):
+                        # print("[NOT MATCH] no matching episode for: ", flt, "[Episode] ", ep)
+                        # for k in flt.items():
+                        #     print(k)
+                        #     if k == "press the orange button":
+                        #         print("!!! [NOT MATCH] no matching episode for: ", flt, "[Episode] ", ep)
                         continue
+                    #print(flt)
+                    # for k in flt.items():
+                    #     if k == "press the orange button":
+                    #         print("!!! [MATCH] matching episode for: ", flt, "[Episode] ", ep)
                     out_rows.extend(build_detect_rows_for_episode_step(
                         spec=spec,
                         ep=ep,

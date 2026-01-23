@@ -7,11 +7,11 @@ Evaluation script for HeLM Video Baseline (Multi-frame Input).
 Supports Qwen2.5-VL with variable number of input images.
 
 export PYTHONPATH=$(pwd)
-CUDA_VISIBLE_DEVICES=7 python evaluate/eval_helm_video/eval_helm_video.py \
-  --jsonl /data/ghkim/helm_data/press_button_in_order/visual_memory_jsonl/val.jsonl \
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
   --adapter /backups/ghkim/HLP_HeLM_video/HeLM_video_press_button_in_order_0121/checkpoint-3000 \
-  --out_jsonl /data/ghkim/helm_data/press_button_in_order/eval_results/video_3k_preds.jsonl \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_10/eval_results/video_3k_preds.jsonl \
   --batch_size 1 \
   --attn_impl sdpa \
   --max_samples 200
@@ -112,19 +112,38 @@ def norm_bool(x: Any) -> Optional[bool]:
 # -------------------------
 # Dataset & Collator
 # -------------------------
-def _load_images_from_list(image_paths: Union[List[str], str]) -> List[Image.Image]:
-    """Load images from list of paths (Video Baseline format)"""
-    if isinstance(image_paths, str):
+def _load_images_from_list(image_paths: Union[List[str], Dict[str, str], str]) -> List[Image.Image]:
+    """
+    Load images from list of paths (Video Baseline) OR dict (HeLM standard).
+    Handles:
+      - List: ["/path/1.jpg", "/path/2.jpg"]
+      - Dict: {"table": "/path/1.jpg"}
+      - String: "/path/1.jpg"
+    """
+    # 1. 딕셔너리 처리 (이 부분이 추가됨)
+    if isinstance(image_paths, dict):
+        if "table" in image_paths:
+            image_paths = [image_paths["table"]]
+        else:
+            image_paths = list(image_paths.values())
+
+    # 2. 단일 문자열 처리
+    elif isinstance(image_paths, str):
         image_paths = [image_paths]
 
+    # 3. 리스트 처리 (기존 로직)
     imgs = []
     for p in image_paths:
         if os.path.exists(p):
-            imgs.append(Image.open(p).convert("RGB"))
+            try:
+                imgs.append(Image.open(p).convert("RGB"))
+            except Exception as e:
+                logger.warning(f"Error opening image {p}: {e}")
+                imgs.append(Image.new("RGB", (224, 224), (0, 0, 0)))
         else:
-            # Fallback: create black image if missing (should not happen)
             logger.warning(f"Image not found: {p}")
             imgs.append(Image.new("RGB", (224, 224), (0, 0, 0)))
+
     return imgs
 
 
@@ -356,11 +375,17 @@ def run_eval(args):
                 gt = norm_bool(gt_yaml.get("Event_Detected"))
                 pr = norm_bool(pred_yaml.get("Event_Detected"))
                 is_correct = (gt == pr) and (gt is not None)
+                print("correct:", is_correct)
+                if not is_correct:
+                    print(gt_yaml, pred_yaml)
             else:  # UPDATE or INIT
                 # Check Action_Command
                 gt_act = norm_str(gt_yaml.get("Action_Command"))
                 pr_act = norm_str(pred_yaml.get("Action_Command"))
                 is_correct = (gt_act == pr_act)
+                print("correct:", is_correct)
+                if not is_correct:
+                    print("[GT] ", gt_yaml, "| [PR]",pred_yaml)
 
             # Record
             stats["total"]["n"] += 1

@@ -222,7 +222,7 @@ def main():
         st.subheader("Key fields")
 
         # A compact schema summary to spot format drift quickly
-        st.markdown("**schema quick check**")
+
         schema = {
             "uid": type(r.get("uid")).__name__,
             "task_id": type(r.get("task_id")).__name__,
@@ -235,27 +235,31 @@ def main():
             "gt_text": type(r.get("gt_text")).__name__,
             "gt_yaml": type(r.get("gt_yaml")).__name__,
         }
-        st.json(schema)
+
+        show_value("gt_text", r.get("gt_text"))
+
+        # Ground-truth representations
+        show_value("user_prompt", r.get("user_prompt"))
+
+        # Event-related fields (DETECT rows)
+        show_value("event_detected", r.get("event_detected"))
+        show_value("event", r.get("event"))
 
         show_value("uid", r.get("uid"))
         show_value("task_id", r.get("task_id"))
         show_value("mode", r.get("mode"))
         show_value("label", r.get("label"))
 
-        # Event-related fields (DETECT rows)
-        show_value("event_detected", r.get("event_detected"))
-        show_value("event", r.get("event"))
+
 
         # Prompt + GT (if present)
         show_value("global_instruction", r.get("task", ""))
-        show_value("user_prompt", r.get("user_prompt"))
 
         # Memory in/out (depending on your pipeline)
         show_value("memory_in", r.get("memory_in", {}))
         show_value("memory_out", r.get("memory_out"))
 
-        # Ground-truth representations
-        show_value("gt_text", r.get("gt_text"))
+
         show_value("gt_yaml", r.get("gt_yaml"))
 
         st.subheader("Row JSON")

@@ -39,5 +39,9 @@ TASKS_DICT = {
         '37' : "pick and place the banana from the red plate to the white plate, then from the white plate to the blue plate, pressing the orange button in between",
         '38' : "pick and place the banana from the white plate to the blue plate, then from the blue plate to the red plate, pressing the orange button in between",
         '39' : "pick and place the banana from the white plate to the red plate, then from the red plate to the blue plate, pressing the orange button in between",
+        '40' : "find the empty bottom left drawer",
+        '41' : "find the empty top left drawer",
+        '42' : "find the empty bottom right drawer",
+        '43' : "find the empty top right drawer",
     }
 

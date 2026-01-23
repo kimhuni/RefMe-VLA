@@ -1,0 +1,53 @@
+{
+  "task_id": "open_top_right",
+  "inter": 1,
+  "intra": [1, 1],
+  "task_text": [
+    "observe in which drawer the orange toy is located",
+    "based on Episodic_Context, find the drawer with orange toy"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "open the top right drawer" }
+    ],
+    [
+      { "tasks": "open the top right drawer" }
+    ]
+  ],
+  "llp_commands": "wait\nopen the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
+  "event_list": "orange toy located at bottom left drawer\norange toy located at bottom right drawer\norange toy located at top left drawer\norange toy located at top right drawer\nbottom left drawer opened\nbottom right drawer opened\ntop left drawer opened\ntop right drawer opened\ndone",
+  "event_grid": [
+    [
+      "orange toy located at top right drawer"
+    ],
+    [
+      "top right drawer opened"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "wait",
+        "Working_Memory": "Progress: none (Goal: observe)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: top_right"
+      }
+    ],
+    [
+      {
+        "Action_Command": "open the top right drawer",
+        "Working_Memory": "Progress: none (Goal: top_right)",
+        "Episodic_Context": "Previous_Progress: top_right"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: top_right"
+      }
+    ]
+  ]
+}

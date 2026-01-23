@@ -219,6 +219,14 @@ def train(cfg: TrainPipelineConfig):
         ds_meta = train_dataset.meta,
     )
 
+    if hasattr(train_dataset, "episode_data_index"):
+        # train_dataset.episode_data_index['from']은 텐서 형태여야 함
+        # 보통 LeRobot 데이터셋은 텐서로 가지고 있음
+        policy.set_episode_starts(train_dataset.episode_data_index["from"])
+        if is_ddp_master(is_distributed, local_rank):
+            logging.info(
+                f"[PCMB] Registered {len(train_dataset.episode_data_index['from'])} episodes for Time Embedding.")
+
     # policy, res = wrap_policy(
     #     policy = policy,
     #     cfg = cfg.method,

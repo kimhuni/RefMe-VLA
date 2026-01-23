@@ -1,0 +1,30 @@
+{
+  "task_id": "wipe_the_window",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "wipe the bottom, middle, top part of the window in order. each part of the window is wiped from left to right."
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "wipe the bottom side of the window" },
+      { "tasks": "wipe the middle side of the window" },
+      { "tasks": "wipe the top side of the window" }
+    ]
+  ],
+  "llp_commands": "wipe the bottom side of the window\nwipe the middle side of the window\nwipe the top side of the window\ndone",
+  "event_list": "bottom side wiped\nmiddle side wiped\ntop side wiped\ndone",
+  "event_grid": [
+    [
+      "bottom side wiped",
+      "middle side wiped",
+      "top side wiped"
+    ]
+  ],
+"memory_grid": [[
+  {"description":"Step 0: Start -> Wipe bottom","Action_Command":"wipe the bottom side of the window"},
+  {"description":"Step 1: Bottom done -> Wipe middle","Action_Command":"wipe the middle side of the window"},
+  {"description":"Step 2: Middle done -> Wipe top","Action_Command":"wipe the top side of the window"},
+  {"description":"Step 3: Top done -> Finish","Action_Command":"done"}
+]]
+}

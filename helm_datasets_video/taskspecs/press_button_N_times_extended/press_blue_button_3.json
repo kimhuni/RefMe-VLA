@@ -1,0 +1,24 @@
+{
+  "task_id": "press_blue_button_3",
+  "inter": 0,
+  "intra": [3],
+  "task_text": ["press the blue button three times"],
+  "episode_filters": [[
+    { "tasks": "press the blue button" },
+    { "tasks": "press the blue button" },
+    { "tasks": "press the blue button" }
+  ]],
+  "llp_commands": "press the blue button\ndone",
+  "event_list": "blue button pressed\ndone",
+  "event_grid": [[
+    "blue button pressed",
+    "blue button pressed",
+    "blue button pressed"
+  ]],
+  "memory_grid": [[
+    { "description": "Step 0: Start -> Should press Blue", "Action_Command": "press the blue button" },
+    { "description": "Step 1: Pressed 1 -> Should press Blue", "Action_Command": "press the blue button" },
+    { "description": "Step 2: Pressed 2 -> Should press Blue", "Action_Command": "press the blue button" },
+    { "description": "Step 3: Pressed 3 -> Finish", "Action_Command": "done" }
+  ]]
+}

@@ -640,8 +640,8 @@ if __name__ == "__main__":
     #episodes = 20
     #create_meta(root_dir, episodes)
 
-    root_dir = "/data/ghkim/concat_data/pick_place_press"
-    episodes = 600
+    root_dir = "/data/ghkim/concat_data/find_object_in_drawer"
+    episodes = 400
     create_meta(root_dir, episodes)
 
     # root_dir = "/data/ghkim/press the green button/lerobot_5hz"

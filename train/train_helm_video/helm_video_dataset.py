@@ -34,13 +34,17 @@ def read_jsonl(path_or_dir: Union[str, Path]) -> List[Dict[str, Any]]:
 
 
 def _load_images(item: Dict[str, Any]) -> List[Image.Image]:
-    """
-    Load images from a list of paths.
-    item['images'] can be a list of strings.
-    """
     image_paths = item.get("images", [])
-    if not isinstance(image_paths, list):
-        # 만약 문자열 하나만 있으면 리스트로 감쌈
+
+    # [수정] 딕셔너리(기존 HeLM 포맷)가 들어오면 'table' 이미지 경로를 리스트로 변환
+    if isinstance(image_paths, dict):
+        # 'table' 키가 있으면 그것을 사용, 없으면 첫 번째 값을 사용
+        if "table" in image_paths:
+            image_paths = [image_paths["table"]]
+        else:
+            image_paths = list(image_paths.values())
+
+    elif not isinstance(image_paths, list):
         if isinstance(image_paths, str):
             image_paths = [image_paths]
         else:
@@ -49,7 +53,6 @@ def _load_images(item: Dict[str, Any]) -> List[Image.Image]:
     imgs: List[Image.Image] = []
     for p in image_paths:
         try:
-            # Qwen2.5-VL expects RGB
             imgs.append(Image.open(p).convert("RGB"))
         except Exception as e:
             raise RuntimeError(f"Failed to load image {p}: {e}")

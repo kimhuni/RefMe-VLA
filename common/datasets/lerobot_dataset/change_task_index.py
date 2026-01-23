@@ -13,45 +13,45 @@ def change_task_index(data_dir, target_task_index, sample_target):
         print(file_path, "- to:" ,target_task_index)
 
 if __name__ == "__main__":
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_BGR/data/chunk-000")
-    # target_task_index = 23
-    # sample_target = list(range(0, 50))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_BGR/data/chunk-001")
-    # target_task_index = 23
-    # sample_target = list(range(50, 100))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_BRG/data/chunk-000")
-    # target_task_index = 24
-    # sample_target = list(range(0, 50))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_BRG/data/chunk-001")
-    # target_task_index = 24
-    # sample_target = list(range(50, 100))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_GBR/data/chunk-000")
-    # target_task_index = 25
-    # sample_target = list(range(0, 50))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_GBR/data/chunk-001")
-    # target_task_index = 25
-    # sample_target = list(range(50, 100))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_GRB/data/chunk-000")
-    # target_task_index = 26
-    # sample_target = list(range(0, 50))
-    # change_task_index(data_dir, target_task_index, sample_target)
-    #
-    # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_GRB/data/chunk-001")
-    # target_task_index = 26
-    # sample_target = list(range(50, 100))
-    # change_task_index(data_dir, target_task_index, sample_target)
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_bottom_left/data/chunk-000")
+    target_task_index = 40
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_bottom_left/data/chunk-001")
+    target_task_index = 40
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_top_left/data/chunk-000")
+    target_task_index = 41
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_top_left/data/chunk-001")
+    target_task_index = 41
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_bottom_right/data/chunk-000")
+    target_task_index = 42
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_bottom_right/data/chunk-001")
+    target_task_index = 42
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_top_right/data/chunk-000")
+    target_task_index = 43
+    sample_target = list(range(0, 50))
+    change_task_index(data_dir, target_task_index, sample_target)
+
+    data_dir = Path("/data/ghkim/concat_data/find_object_in_drawer/find_top_right/data/chunk-001")
+    target_task_index = 43
+    sample_target = list(range(50, 100))
+    change_task_index(data_dir, target_task_index, sample_target)
     #
     # data_dir = Path("/data/ghkim/concat_data/press_button_in_order/press_button_RBG/data/chunk-000")
     # target_task_index = 27

@@ -1,5 +1,5 @@
 export PYTHONPATH=$(pwd)
-OUT_ROOT="/data/ghkim/helm_data/helm_v4_task_10_extended"
+OUT_ROOT="/data/ghkim/helm_data/helm_v4_task_10_extended_re"
 
 # A1
 python -m helm_datasets_v4.build_helm \

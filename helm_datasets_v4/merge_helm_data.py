@@ -11,8 +11,8 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 """
 # 전부 병합
 python helm_datasets_v3/merge_helm_data.py \
-  --jsonl_root /data/ghkim/helm_data/open_drawer_with_object/jsonl_v4 \
-  --out_dir   /data/ghkim/helm_data/open_drawer_with_object/jsonl_v4/merged \
+  --jsonl_root /data/ghkim/helm_data/helm_video_task_10/jsonl_v4 \
+  --out_dir   /data/ghkim/helm_data/helm_video_task_10/jsonl_v4/merged \
   --split_mode keep \
   --shard_size 0
   

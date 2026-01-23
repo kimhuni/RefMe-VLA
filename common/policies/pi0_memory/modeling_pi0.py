@@ -81,6 +81,14 @@ class PI0_MEMORY_Policy(PreTrainedPolicy):
 
         self.reset()
 
+    def set_episode_starts(self, episode_starts: Tensor):
+        """
+        데이터셋의 각 에피소드 시작 인덱스를 저장합니다.
+        episode_step 계산에 사용됩니다.
+        """
+        # 버퍼로 등록하여 디바이스 이동(to device)이 자동으로 되게 함
+        self.register_buffer("episode_starts", episode_starts, persistent=False)
+
     def reset(self):
         """This should be called whenever the environment is reset."""
         self._action_queue = deque([], maxlen=self.config.n_action_steps)
@@ -147,6 +155,72 @@ class PI0_MEMORY_Policy(PreTrainedPolicy):
             if isinstance(module, nn.Linear):
                 for p in module.parameters():
                     p.requires_grad = True
+
+    def forward(
+            self,
+            batch: dict[str, Tensor],
+            noise=None,
+            time=None,
+    ) -> tuple[Tensor, dict[str, Tensor]]:
+
+        # 1. PI Aloha 어댑테이션 (기존 로직 유지)
+        if self.config.adapt_to_pi_aloha:
+            batch[OBS_ROBOT] = self._pi_aloha_decode_state(batch[OBS_ROBOT])
+            batch[ACTION] = self._pi_aloha_encode_actions_inv(batch[ACTION])
+
+        # 2. 정규화 (기존 로직 유지)
+        batch = self.normalize_inputs(batch)
+        batch = self.normalize_targets(batch)
+
+        # 3. 데이터 준비 (기존 로직 유지)
+        images, img_masks = self.prepare_images(batch)
+        state = self.prepare_state(batch)
+        lang_tokens, lang_masks = self.prepare_language(batch)
+        actions = self.prepare_action(batch)
+        actions_is_pad = batch.get("action_is_pad")
+
+        # ==================================================================
+        # [NEW] Episode Step 계산 (Time Embedding용)
+        # ==================================================================
+        episode_step = None
+
+        # batch에 'index'가 있고, episode_starts가 등록되어 있어야 계산 가능
+        if "index" in batch and hasattr(self, "episode_starts"):
+            global_indices = batch["index"]  # [Batch_Size]
+
+            # 현재 인덱스가 어떤 에피소드 구간에 속하는지 찾기 (Bucketize)
+            # right=True: start index보다 작지 않은 곳을 찾음 -> -1 해서 에피소드 ID 획득
+            episode_ids = torch.bucketize(global_indices, self.episode_starts, right=True) - 1
+
+            # 현재 에피소드의 시작 인덱스 가져오기
+            current_episode_starts = self.episode_starts[episode_ids]
+
+            # 상대적 스텝 계산 (Global Index - Episode Start Index)
+            episode_step = global_indices - current_episode_starts
+
+            # Dtype 안전장치 (Long -> Int or Float as needed)
+            episode_step = episode_step.to(dtype=torch.long)
+
+        # 4. 모델 Forward 호출 (episode_step 전달)
+        loss_dict = {}
+        # self.model.forward에 episode_step 인자를 추가로 전달
+        losses = self.model.forward(
+            images, img_masks, lang_tokens, lang_masks, state, actions, noise, time,
+            episode_step=episode_step  # <--- 전달!
+        )
+        loss_dict["losses_after_forward"] = losses.clone()
+        if actions_is_pad is not None:
+            in_episode_bound = ~actions_is_pad
+            losses = losses * in_episode_bound.unsqueeze(-1)
+            loss_dict["losses_after_in_ep_bound"] = losses.clone()
+        losses = losses[:, :, : self.config.max_action_dim]
+        loss_dict["losses_after_rm_padding"] = losses.clone()
+        loss = losses.mean()
+        loss_dict["l2_loss"] = loss.item()
+
+        return loss, loss_dict
+
+
 
     @torch.no_grad
     def select_action(self, batch: dict[str, Tensor], noise: Tensor | None = None) -> Tensor:
@@ -428,7 +502,7 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         return embs, pad_masks, att_masks
 
     def forward(
-        self, images, img_masks, lang_tokens, lang_masks, state, actions, noise=None, time=None
+        self, images, img_masks, lang_tokens, lang_masks, state, actions, noise=None, time=None, episode_step=None
     ) -> Tensor:
         """Do a full training forward pass and compute the loss (batch_size x num_steps x num_motors)"""
         if noise is None:
@@ -441,10 +515,9 @@ class PI0FlowMatching(PreTrainedFlowMatching):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        current_step = None
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, episode_step=current_step
+            images, img_masks, lang_tokens, lang_masks, episode_step=episode_step
         )
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, time)
 
@@ -608,6 +681,14 @@ class MemoryVLA_PCMB(nn.Module):
 
     def reset_memory(self):
         nn.init.normal_(self.memory_bank, mean=0.0, std=0.02)
+
+    def set_episode_starts(self, episode_starts: Tensor):
+        """
+        데이터셋의 각 에피소드 시작 인덱스를 저장합니다.
+        episode_step 계산에 사용됩니다.
+        """
+        # 버퍼로 등록하여 디바이스 이동(to device)이 자동으로 되게 함
+        self.register_buffer("episode_starts", episode_starts, persistent=False)
 
     # [CHANGE] forward 함수에 episode_step 인자 추가
     def forward(self, x_img, episode_step=None):
