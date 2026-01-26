@@ -85,7 +85,7 @@ if __name__ == '__main__':
     sample_target = list(range(0, 10))
     # directory to merge
     # target_dir = '/data/ghkim/concat_data/press_button_N_time'
-    target_dir = '/data/ghkim/concat_data/find_object_in_drawer'
+    target_dir = '/data/ghkim/data_hub/find_open_the_drawer_ep120'
 
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(os.path.join(target_dir, 'data'), exist_ok=True)
@@ -93,17 +93,20 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(target_dir, 'videos'), exist_ok=True)
 
     ################### CHANGE TARGET DIRCTORY TOO !!!!!!!!!!!! #####################
-    data_dir = '/data/ghkim/concat_data/find_object_in_drawer/find_bottom_left'
-    sample_dataset(list(range(0, 100)), data_dir, target_dir, 0)
+    data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40'
+    sample_dataset(list(range(0, 40)), data_dir, target_dir, 80)
 
-    data_dir = '/data/ghkim/concat_data/find_object_in_drawer/find_bottom_right'
-    sample_dataset(list(range(0, 100)), data_dir, target_dir, 100)
+    data_dir = '/data/ghkim/data_hub/find_open_the_drawer_ep120_old'
+    sample_dataset(list(range(0, 80)), data_dir, target_dir, 0)
 
-    data_dir = '/data/ghkim/concat_data/find_object_in_drawer/find_top_left'
-    sample_dataset(list(range(0, 100)), data_dir, target_dir, 200)
+    #data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightdown_drawer_empty/lerobot_5hz'
+    #sample_dataset(list(range(0, 10)), data_dir, target_dir, 20)
 
-    data_dir = '/data/ghkim/concat_data/find_object_in_drawer/find_top_right'
-    sample_dataset(list(range(0, 100)), data_dir, target_dir, 300)
+    #data_dir = '/data/ghkim/data_hub/open_empty_drawer_ep40/open_rightup_drawer_empty/lerobot_5hz'
+    #sample_dataset(list(range(0, 10)), data_dir, target_dir, 30)
+    #data_dir = '/data/ghkim/data_hub/find_open_the_drawer_ep120_old'
+    #sample_dataset(list(range(0, 80)), data_dir, target_dir, 0)
+
 
     # data_dir = '/data/ghkim/concat_data/pick_place_press/pick_place_press_WBR'
     # sample_dataset(list(range(0, 100)), data_dir, target_dir, 400)

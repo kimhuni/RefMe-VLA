@@ -5,7 +5,7 @@ from PIL import Image
 from glob import glob
 
 """
-streamlit run view_dataset.py
+streamlit run helm_datasets_video/view_dataset.py
 """
 
 # 페이지 설정 (와이드 모드)
@@ -66,83 +66,96 @@ def main():
     # 현재 샘플 가져오기
     sample = data[index]
 
-    # 메타데이터 표시
+
+    # ---------------------------------------------------------
+    # 3~4. 이미지 + 텍스트를 한 화면에 (왼쪽: 이미지, 오른쪽: 텍스트)
+    # ---------------------------------------------------------
     st.markdown("---")
-    c1, c2, c3 = st.columns([1, 1, 2])
-    with c1:
-        st.info(f"**UID:** {sample.get('uid', 'N/A')}")
-    with c2:
-        mode = sample.get('mode', 'UNKNOWN')
-        if mode == 'DETECT':
-            st.success(f"**Mode:** {mode}")
-        else:
-            st.warning(f"**Mode:** {mode}")
-    with c3:
-        st.text(f"Task ID: {sample.get('meta', {}).get('task', 'N/A')}")
 
-    # ---------------------------------------------------------
-    # 3. 이미지 시각화 (핵심 기능)
-    # ---------------------------------------------------------
-    st.subheader("🖼️ Visual Context (Input Images)")
+    # 왼쪽 이미지 패널이 차지할 비율 선택 (1/2 또는 1/3)
+    st.sidebar.header("🧩 Layout")
+    img_panel_ratio = st.sidebar.selectbox(
+        "Image Panel Width",
+        options=["1/2", "1/3"],
+        index=0,
+        help="이미지 패널이 화면에서 차지하는 비율을 선택합니다.",
+    )
 
-    image_paths = sample.get('images', [])
-    if not isinstance(image_paths, list):
-        image_paths = [image_paths]  # 단일 경로일 경우 리스트로 변환
+    if img_panel_ratio == "1/3":
+        left_col, right_col = st.columns([1, 2])  # 왼쪽 1/3, 오른쪽 2/3
+    else:
+        left_col, right_col = st.columns([1, 1])  # 왼쪽 1/2, 오른쪽 1/2
 
-    if image_paths:
-        # 이미지를 한 줄에 표시 (개수가 많으면 여러 줄로)
-        cols = st.columns(len(image_paths))
-        for idx, (col, img_path) in enumerate(zip(cols, image_paths)):
-            with col:
+    # ---- 왼쪽: 이미지 (여러 장이면 위아래로 쌓기) ----
+    with left_col:
+        st.subheader("🖼️ Visual Context")
+
+        image_paths = sample.get('images', [])
+        if not isinstance(image_paths, list):
+            image_paths = [image_paths]  # 단일 경로일 경우 리스트로 변환
+
+        if image_paths:
+            # 이미지 크기(폭) 조절: 컬럼 폭에 맞추되 너무 크지 않게 옵션 제공
+            img_width = st.sidebar.slider(
+                "Image Width (px)",
+                min_value=120,
+                max_value=480,
+                value=260,
+                step=10,
+                help="이미지를 더 작게 보고 싶으면 값을 줄이세요.",
+            )
+
+            for idx, img_path in enumerate(image_paths):
                 if os.path.exists(img_path):
                     img = Image.open(img_path)
-                    st.image(img, use_container_width=True)
+                    st.image(img, width=img_width)
 
-                    # 캡션 달기
-                    if mode == "UPDATE":
-                        if idx == 0:
-                            caption = "Start Frame (Context)"
-                        else:
-                            caption = f"Event History #{idx}"
-                    else:
-                        caption = "Current Observation"
+                    caption = "Current Observation"
 
                     st.caption(f"**[{idx}]** {caption}\n`...{img_path[-30:]}`")
+                    st.markdown("---")
                 else:
                     st.error(f"Image not found:\n{img_path}")
-    else:
-        st.warning("No images found in this sample.")
+        else:
+            st.warning("No images found in this sample.")
 
-    # ---------------------------------------------------------
-    # 4. 프롬프트 및 정답 확인
-    # ---------------------------------------------------------
-    st.markdown("---")
-    st.subheader("📝 Text Data")
+    # ---- 오른쪽: 텍스트 (Prompt / GT / Raw) ----
+    with right_col:
+        # ---- 메타데이터 (UID / Mode / Task) ----
+        st.markdown("### 🧾 Metadata")
+        m1, m2, m3 = st.columns([1, 1, 2])
+        with m1:
+            st.info(f"**UID:** {sample.get('uid', 'N/A')}")
+        with m2:
+            mode = sample.get('mode', 'UNKNOWN')
+            if mode == 'DETECT':
+                st.success(f"**Mode:** {mode}")
+            else:
+                st.warning(f"**Mode:** {mode}")
+        with m3:
+            st.text(f"Task ID: {sample.get('meta', {}).get('task', 'N/A')}")
 
-    col_l, col_r = st.columns(2)
+        st.markdown("---")
+        st.subheader("📝 Text Data")
 
-    with col_l:
-        st.markdown("### User Prompt (Input)")
-        prompt_content = sample.get('user_prompt', '')
-        st.text_area("Full Prompt", value=prompt_content, height=400, disabled=True)
+        tab_prompt, tab_gt, tab_raw = st.tabs(["User Prompt", "Ground Truth", "Raw JSON"])
 
-    with col_r:
-        st.markdown("### Ground Truth (Output)")
-        gt_text = sample.get('gt_text', '')
+        with tab_prompt:
+            prompt_content = sample.get('user_prompt', '')
+            st.text_area("Full Prompt", value=prompt_content, height=520, disabled=True)
 
-        # YAML 파싱 시도 (가독성을 위해)
-        try:
-            import yaml
-            gt_json = yaml.safe_load(gt_text)
-            st.json(gt_json)
-        except:
-            st.code(gt_text, language='yaml')
+        with tab_gt:
+            gt_text = sample.get('gt_text', '')
+            # YAML 파싱 시도 (가독성을 위해)
+            try:
+                import yaml
+                gt_json = yaml.safe_load(gt_text)
+                st.json(gt_json)
+            except Exception:
+                st.code(gt_text, language='yaml')
 
-    # ---------------------------------------------------------
-    # 5. Raw Data (디버깅용)
-    # ---------------------------------------------------------
-    with st.expander("🔍 View Raw JSON Sample"):
-        st.json(sample)
+        with tab_raw:
+            st.json(sample)
 
 
 if __name__ == "__main__":

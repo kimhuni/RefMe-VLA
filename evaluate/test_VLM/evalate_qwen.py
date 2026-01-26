@@ -61,14 +61,14 @@ IMAGE_PATH_R = "/data/ghkim/helm_data/press_button_in_order/frames_5hz/chunk-000
 #   "Use only: red, green, blue for the color. No other text."
 # )
 
-# USER_PROMPT = (
-#   "The images show a robot arm pressing either red, green, blue button.\n"
-#   "The images are in time order (Image 1,2,3,4). \n"
-#   "For EACH image, exactly identify the color of the button being pressed.\n"
-#   "Return one line in this EXACT format:\n"
-#   "image1 : <c1>, image2 : <c2>, image3 : <c3>, image4 : <c4>\n"
-#   "Use only: red, blue, green for the color. No other text."
-# )
+USER_PROMPT = (
+  "The images show a robot arm pressing the blue button.\n"
+  "The images are in time order (Image 1,2,3,4). \n"
+  "For EACH image, exactly whether the button being pressed.\n"
+  "Return one line in this EXACT format:\n"
+  "image1 : <c1>, image2 : <c2>, image3 : <c3>, image4 : <c4>\n"
+  "Use only: red, blue, green for the color. No other text."
+)
 
 
 # USER_PROMPT = (
@@ -98,15 +98,15 @@ messages = [
             },
             {
                 "type": "image",
-                "image": IMAGE_PATH_2,
+                "image": IMAGE_PATH_1,
             },
             {
                 "type": "image",
-                "image": IMAGE_PATH_3,
+                "image": IMAGE_PATH_1,
             },
             {
                 "type": "image",
-                "image": IMAGE_PATH_4,
+                "image": IMAGE_PATH_1,
             },
             # {
             #     "type": "image",

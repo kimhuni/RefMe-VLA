@@ -44,22 +44,35 @@ def count_labels(rows: List[Dict[str, Any]]) -> Dict[str, int]:
     return out
 
 
-def _load_images(item: Dict[str, Any], num_images: int) -> List[Image.Image]:
+# 기존 코드 대신 아래 코드로 교체
+def _load_images(item: Dict[str, Any], num_images: int) -> Optional[List[Image.Image]]:
     imgs: List[Image.Image] = []
     images = item.get("images", {})
     if not isinstance(images, dict):
-        raise ValueError("row['images'] must be a dict")
+        # 에러 대신 None 반환 (로그 출력 권장)
+        print(f"[Warning] row['images'] must be a dict. Skipping uid: {item.get('uid', 'unknown')}")
+        return None
 
     table = images.get("table", None)
     if table is None:
-        raise ValueError("row['images']['table'] is missing")
-    imgs.append(Image.open(table).convert("RGB"))
+        print(f"[Warning] row['images']['table'] is missing. Skipping uid: {item.get('uid', 'unknown')}")
+        return None
 
-    if num_images == 2:
-        wrist = images.get("wrist", None)
-        if wrist is None:
-            raise ValueError("num_images=2 but row['images']['wrist'] is missing")
-        imgs.append(Image.open(wrist).convert("RGB"))
+    try:
+        imgs.append(Image.open(table).convert("RGB"))
+
+        if num_images == 2:
+            wrist = images.get("wrist", None)
+            if wrist is None:
+                print(f"[Warning] num_images=2 but wrist missing. Skipping uid: {item.get('uid', 'unknown')}")
+                return None
+            imgs.append(Image.open(wrist).convert("RGB"))
+
+    except (FileNotFoundError, OSError) as e:
+        # 파일이 없거나 깨진 경우 경고 메시지를 출력하고 None 반환
+        print(f"[Skip] Image load failed: {e}")
+        return None
+
     return imgs
 
 
@@ -125,7 +138,10 @@ class HelmJsonlDatasetV4(Dataset):
         user_prompt = str(item.get("user_prompt", ""))
         target_text = str(item.get("gt_text", ""))
 
+        # 수정된 부분: 이미지가 없으면 None 반환
         imgs = _load_images(item, self.cfg.num_images)
+        if imgs is None:
+            return None
 
         # Qwen2.5-VL chat messages (images are separate tokens, not embedded in text)
         # user_prompt에 "Images: <image_table>" 같은 줄이 있어도 상관은 없지만,

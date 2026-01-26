@@ -11,11 +11,26 @@ from train.train_helm_video.helm_video_dataset import (
 """
 export PYTHONPATH=$(pwd)
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-CUDA_VISIBLE_DEVICES=5 torchrun --nproc_per_node=1 train/train_helm_video/train_helm_video.py \
+CUDA_VISIBLE_DEVICES=7 python train/train_helm_video/train_helm_video.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/helm_video_task_3/visual_memory_jsonl/train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/helm_video_task_3/visual_memory_jsonl/val.jsonl \
-  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_3_0123 \
+  --train_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_video_task_5/merged/all_val.jsonl \
+  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_5_0125 \
+  --batch_size 3 \
+  --n_detect_pos 1 --n_detect_neg 1 --n_update 1 \
+  --max_pixels 602112 \
+  --max_steps 30000 \
+  --save_steps 500 \
+  --logging_steps 10 \
+  --wandb_project "RefMe" \
+  --wandb_run_name "HeLM_video_task_5_0125"
+
+
+CUDA_VISIBLE_DEVICES=6 torchrun --nproc_per_node=1 train/train_helm_video/train_helm_video.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_val.jsonl \
+  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_10_0125 \
   --batch_size 3 \
   --n_detect_pos 1 --n_detect_neg 1 --n_update 1 \
   --max_pixels 602112 \
@@ -23,7 +38,7 @@ CUDA_VISIBLE_DEVICES=5 torchrun --nproc_per_node=1 train/train_helm_video/train_
   --save_steps 500 \
   --logging_steps 10 \
   --wandb_project "RefMe" \
-  --wandb_run_name "HeLM_video_task_3_0123"
+  --wandb_run_name "HeLM_video_task_10_0125"
 """
 
 import argparse

@@ -17,9 +17,9 @@ from helm_datasets_v4.core.templates import dump_yaml, make_detect_prompt, make_
 """
 export PYTHONPATH=$(pwd)
 python -m helm_datasets_v4.build_helm \
-  --data_root "/data/ghkim/helm_data/open_drawer_with_object" \
+  --data_root "/data/ghkim/helm_data/find_object_in_drawer" \
   --out_root "/data/ghkim/helm_data/helm_v4_task_10_extended_re" \
-  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/open_drawer_with_object" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_v4/taskspecs/find_object_in_drawer" \
   --fps_out 5 \
   --n_images 1 \
   --val_ratio 0.1 \

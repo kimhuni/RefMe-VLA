@@ -1,0 +1,60 @@
+{
+  "task_id": "pickplace_RWB",
+  "inter": 1,
+  "intra": [2, 1],
+  "task_text": [
+    "pick and place the banana from the red plate to the white plate, then from the white plate to the blue plate",
+    "pick and place the banana from current plate to its original plate"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "pick up the banana from the red plate and place it on the white plate" },
+      { "tasks": "pick up the banana from the white plate and place it on the blue plate" }
+    ],
+    [
+      { "tasks": "pick up the banana from the blue plate and place it on the red plate" }
+    ]
+  ],
+  "llp_commands": "pick up the banana from the blue plate and place it on the red plate\npick up the banana from the blue plate and place it on the white plate\npick up the banana from the red plate and place it on the blue plate\npick up the banana from the red plate and place it on the white plate\npick up the banana from the white plate and place it on the blue plate\npick up the banana from the white plate and place it on the red plate\ndone",
+  "event_list": "banana moved to white\nbanana moved to red\nbanana moved to blue\ndone",
+  "event_grid": [
+    [
+      "banana moved to white",
+      "banana moved to blue"
+    ],
+    [
+      "banana moved to red"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "pick up the banana from the red plate and place it on the white plate",
+        "Working_Memory": "Progress: none (Goal: red_to_white, white_to_blue)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "pick up the banana from the white plate and place it on the blue plate",
+        "Working_Memory": "Progress: red_to_white (Goal: red_to_white, white_to_blue)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: origin_red, red_to_white, white_to_blue"
+      }
+    ],
+    [
+      {
+        "Action_Command": "pick up the banana from the blue plate and place it on the red plate",
+        "Working_Memory": "Progress: none (Goal: blue_to_red)",
+        "Episodic_Context": "Previous_Progress: origin_red, red_to_white, white_to_blue"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: origin_red, red_to_white, white_to_blue, blue_to_red"
+      }
+    ]
+  ]
+}

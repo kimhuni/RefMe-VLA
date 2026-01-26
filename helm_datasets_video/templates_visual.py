@@ -55,17 +55,28 @@ def make_detect_prompt(
 # -----------------------------------------------------------------------------
 # 2. UPDATE MODE SYSTEM PROMPT (User Provided + Visual Context)
 # -----------------------------------------------------------------------------
+# utils_video_batches.py
+
 UPDATE_SYSTEM = (
     "Role: Robot arm Logic State Manager (UPDATE mode).\n"
     "When: Event happened (from DETECT) OR Task changed (new stage).\n\n"
     "Inputs:\n"
     "- Task: current instruction.\n"
-    "- Event: detected event string (or 'none').\n"
+    "- Event: detected event string.\n"
     "- Previous_Action_Command: The action that was just completed.\n"
     "- Allowed_Action_Commands: you MUST output EXACTLY one of them.\n"
     "- Images: A sequence of historical event frames showing the progress so far.\n\n"
     "Goal:\n"
-    "Analyze the visual history(Images) and the current event to choose the next Action_Command.\n\n"
+    "Carefully analyze the visual history (Images) to verify which sub-tasks have been completed.\n"
+    "Compare the visual evidence against the 'Task' requirements to choose the next Action_Command.\n\n"
+
+    "Decision Rules (CRITICAL):\n"
+    "1. Scan the 'Images' sequence to list all actions completed so far.\n"
+    "2. Compare completed actions with the required steps in 'Task'.\n"
+    "3. If ANY step is missing in the visual history, output the action for that missing step.\n"
+    "4. Output 'done' ONLY IF the visual history proves ALL required steps are finished.\n"
+    "   - Do NOT output 'done' if there are remaining steps.\n\n"
+
     "Constraints:\n"
     "- Do not invent new actions, keys, or free-form formats; follow the dataset style.\n"
     "- Action_Command MUST be 'done' if the task is finished.\n"

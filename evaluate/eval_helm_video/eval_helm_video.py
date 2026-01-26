@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 """
 eval_video_baseline.py
 
@@ -7,17 +8,15 @@ Evaluation script for HeLM Video Baseline (Multi-frame Input).
 Supports Qwen2.5-VL with variable number of input images.
 
 export PYTHONPATH=$(pwd)
-CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_video/eval_helm_video.py \
-  --jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_val.jsonl \
+CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_3/merged/all_val.jsonl \
   --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter /backups/ghkim/HLP_HeLM_video/HeLM_video_press_button_in_order_0121/checkpoint-3000 \
-  --out_jsonl /data/ghkim/helm_data/helm_video_task_10/eval_results/video_3k_preds.jsonl \
+  --adapter /backups/ghkim/HLP_HeLM_video/HeLM_video_task_3_0124/checkpoint-3000 \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_3/eval_results/video_3k_preds.jsonl \
   --batch_size 1 \
   --attn_impl sdpa \
-  --max_samples 200
+  --max_samples 500
 """
-
-from __future__ import annotations
 
 import argparse
 import json
@@ -120,7 +119,7 @@ def _load_images_from_list(image_paths: Union[List[str], Dict[str, str], str]) -
       - Dict: {"table": "/path/1.jpg"}
       - String: "/path/1.jpg"
     """
-    # 1. 딕셔너리 처리 (이 부분이 추가됨)
+    # 1. 딕셔너리 처리
     if isinstance(image_paths, dict):
         if "table" in image_paths:
             image_paths = [image_paths["table"]]
@@ -131,7 +130,7 @@ def _load_images_from_list(image_paths: Union[List[str], Dict[str, str], str]) -
     elif isinstance(image_paths, str):
         image_paths = [image_paths]
 
-    # 3. 리스트 처리 (기존 로직)
+    # 3. 리스트 처리
     imgs = []
     for p in image_paths:
         if os.path.exists(p):
@@ -165,13 +164,12 @@ class VideoEvalDataset(Dataset):
         num_images = len(imgs)
 
         # 2. Construct Chat Messages
-        # Qwen2.5-VL: List of images followed by text
         user_content = [{"type": "image"} for _ in range(num_images)]
         user_content.append({"type": "text", "text": user_prompt})
 
         messages = [{"role": "user", "content": user_content}]
 
-        # Apply Template (Add generation prompt)
+        # Apply Template
         prompt_string = self.processor.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -196,9 +194,7 @@ class VideoEvalDataset(Dataset):
             elif grid_thw.ndim == 1 and grid_thw.numel() == 3:
                 grid_thw = grid_thw.unsqueeze(0)
 
-            # Ensure (N, 3)
             if grid_thw.ndim != 2 or grid_thw.size(-1) != 3:
-                # Attempt reshape if flattened
                 if grid_thw.numel() % 3 == 0:
                     grid_thw = grid_thw.view(-1, 3)
                 else:
@@ -219,15 +215,12 @@ class VideoEvalDataset(Dataset):
 class VideoEvalCollator:
     def __init__(self, processor):
         self.tokenizer = processor.tokenizer
-        self.tokenizer.padding_side = "left"  # Gen needs left padding
+        self.tokenizer.padding_side = "left"
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
-        # Batching Text
         pad_id = self.tokenizer.pad_token_id
         input_ids = self._left_pad([f["input_ids"] for f in features], pad_id)
         attention_mask = self._left_pad([f["attention_mask"] for f in features], 0)
-
-        # Batching Images
         pixel_values = torch.cat([f["pixel_values"] for f in features], dim=0)
 
         batch = {
@@ -240,7 +233,6 @@ class VideoEvalCollator:
             "pixel_values": pixel_values,
         }
 
-        # Handle Grid THW
         if features[0].get("image_grid_thw") is not None:
             grids = []
             for f in features:
@@ -266,7 +258,6 @@ class VideoEvalCollator:
 # -------------------------
 def load_model(base_model, adapter, use_qlora, attn_impl):
     processor = AutoProcessor.from_pretrained(base_model, trust_remote_code=True)
-
     bnb_config = None
     if use_qlora:
         bnb_config = BitsAndBytesConfig(
@@ -308,7 +299,6 @@ def run_eval(args):
     # 3. DataLoader
     ds = VideoEvalDataset(rows, processor)
     collate = VideoEvalCollator(processor)
-    # Important: Batch size 1 or 2 to avoid OOM with multiple images
     dl = DataLoader(ds, batch_size=args.batch_size, collate_fn=collate, num_workers=4)
 
     # 4. Loop
@@ -327,34 +317,15 @@ def run_eval(args):
             pixel_values=pixel_values,
             image_grid_thw=grid_thw,
             max_new_tokens=128,
-            do_sample=False,  # Greedy
+            do_sample=False,
         )
 
-        # Decode
-        # Slicing: generated_ids includes prompt, so we remove prompt part
-        # Note: with left padding, simple slicing is tricky.
-        # Using built-in batch_decode on the full sequence and splitting is safer,
-        # but let's just strip the prompt text from the output.
         decoded_texts = processor.batch_decode(generated_ids, skip_special_tokens=True)
 
-        # Post-process to extract only new tokens (heuristic)
-        # Or better: slice generated_ids based on input_ids length if using right padding.
-        # With left padding, the prompt length varies.
-        # Simple approach: The assistant response usually starts after the prompt.
-
-        # More robust: calculate input length per sample
         input_lens = attention_mask.sum(dim=1)
         final_preds = []
         for i, seq in enumerate(generated_ids):
-            # Qwen output contains input.
-            # We locate the last user message end or assistant start?
-            # Easiest way with transformers generate:
-            new_tokens = seq[input_ids.shape[1]:]  # This works if input_ids were strictly passed
-            # But with left padding, input_ids has padding at start.
-            # Qwen generate usually returns [pad, pad, prompt, answer]
-            # So cutting off len(input_ids) is actually correct for causal LM generation in HF.
-
-            # However, simpler is:
+            # Remove input tokens from output
             pred = processor.decode(seq[input_ids.shape[1]:], skip_special_tokens=True)
             final_preds.append(pred.strip())
 
@@ -368,39 +339,35 @@ def run_eval(args):
             mode = batch["modes"][i]
             label = batch["labels"][i]
 
-            # Logic Check
             is_correct = False
             if mode == "DETECT":
-                # Check Event_Detected
                 gt = norm_bool(gt_yaml.get("Event_Detected"))
                 pr = norm_bool(pred_yaml.get("Event_Detected"))
                 is_correct = (gt == pr) and (gt is not None)
-                print("correct:", is_correct)
                 if not is_correct:
-                    print(gt_yaml, pred_yaml)
-            else:  # UPDATE or INIT
-                # Check Action_Command
+                    # Debug print
+                    print(f"[Incorrect DETECT] UID: {batch['uids'][i]} | GT: {gt} | PR: {pr}")
+            else:
                 gt_act = norm_str(gt_yaml.get("Action_Command"))
                 pr_act = norm_str(pred_yaml.get("Action_Command"))
                 is_correct = (gt_act == pr_act)
-                print("correct:", is_correct)
                 if not is_correct:
-                    print("[GT] ", gt_yaml, "| [PR]",pred_yaml)
+                    # Debug print
+                    print(f"[Incorrect UPDATE] UID: {batch['uids'][i]} | GT: {gt_act} | PR: {pr_act}")
 
-            # Record
             stats["total"]["n"] += 1
             stats["total"]["ok"] += int(is_correct)
-
             stats[mode]["n"] += 1
             stats[mode]["ok"] += int(is_correct)
-
             stats[label]["n"] += 1
             stats[label]["ok"] += int(is_correct)
 
+            # [수정] 결과 저장 시 이미지 경로 포함
             results.append({
                 "uid": batch["uids"][i],
                 "mode": mode,
                 "label": label,
+                "images": row.get("images", []),  # <--- 이미지 경로 저장
                 "gt_text": gt_text,
                 "pred_text": pred_text,
                 "correct": is_correct

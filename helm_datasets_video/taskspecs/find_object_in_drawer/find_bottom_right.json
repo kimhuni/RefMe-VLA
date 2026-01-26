@@ -1,0 +1,40 @@
+{
+  "task_id": "find_bottom_right",
+  "inter": 0,
+  "intra": [3],
+  "task_text": [
+    "open the drawers in the following order to find the orange toy, and stop when you find it in the drawer: top_left, top_right, bottom_right, bottom_left"
+  ],
+  "episode_filters": [
+    [
+      { "tasks": "open the top left drawer empty" },
+      { "tasks": "open the top right drawer empty" },
+      { "tasks": "open the bottom right drawer" }
+    ]
+  ],
+  "llp_commands": "open the bottom left drawer\nopen the bottom right drawer\nopen the top left drawer\nopen the top right drawer\ndone",
+  "event_list": "nothing at the current drawer\norange toy located at bottom left drawer\norange toy located at bottom right drawer\norange toy located at top left drawer\norange toy located at top right drawer\ndone",
+  "event_grid": [
+    [
+      "nothing at the current drawer",
+      "nothing at the current drawer",
+      "orange toy located at bottom right drawer"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "open the top left drawer"
+      },
+      {
+        "Action_Command": "open the top right drawer"
+      },
+      {
+        "Action_Command": "open the bottom right drawer"
+      },
+      {
+        "Action_Command": "done"
+      }
+    ]
+  ]
+}
