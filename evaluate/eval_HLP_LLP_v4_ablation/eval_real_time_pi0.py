@@ -38,9 +38,9 @@ class LLPConfig:
     max_steps: int = 1000
     seed: Optional[int] = None
     fps: int = 5
-    cam_list: list[str] = field(default_factory=lambda: ['wrist', 'exo', 'table'])
+    cam_list: list[str] = field(default_factory=lambda: [ 'wrist', 'table'])# ['wrist', 'exo', 'table'])
     device: str = "cuda:0"
-    infer_chunk: int = 40
+    infer_chunk: int = 30
 
     def __post_init__(self):
         if self.policy is not None:
@@ -62,7 +62,7 @@ class LLPRuntimeContext:
     piper: Any
     table_rs_cam: Any
     wrist_rs_cam: Any
-    exo_rs_cam: Any
+    # exo_rs_cam: Any
 
 
 # =========================
@@ -144,7 +144,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     if cfg.use_devices:
         piper, cam = init_devices(cfg)
         wrist_rs_cam = cam["wrist_rs_cam"]
-        exo_rs_cam = cam["exo_rs_cam"]
+        # exo_rs_cam = cam["exo_rs_cam"]
         table_rs_cam = cam["table_rs_cam"]
     else:
         piper = None
@@ -174,7 +174,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
 
     if cfg.use_devices:
         wrist_rs_cam.start_recording()
-        exo_rs_cam.start_recording()
+        # exo_rs_cam.start_recording()
         table_rs_cam.start_recording()
 
     time.sleep(5)
@@ -194,7 +194,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         piper=piper,
         table_rs_cam=table_rs_cam,
         wrist_rs_cam=wrist_rs_cam,
-        exo_rs_cam=exo_rs_cam,
+        # exo_rs_cam=exo_rs_cam,
     )
 
 

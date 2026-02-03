@@ -38,7 +38,7 @@ class LLPConfig:
     max_steps: int = 1000
     seed: Optional[int] = None
     fps: int = 5
-    cam_list: list[str] = field(default_factory=lambda: ['wrist', 'exo', 'table'])
+    cam_list: list[str] = field(default_factory=lambda: ['wrist', 'table'])
     device: str = "cuda:0"
     infer_chunk: int = 40
 
@@ -62,7 +62,7 @@ class LLPRuntimeContext:
     piper: Any
     table_rs_cam: Any
     wrist_rs_cam: Any
-    exo_rs_cam: Any
+    # exo_rs_cam: Any
 
 
 # =========================
@@ -144,7 +144,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
     if cfg.use_devices:
         piper, cam = init_devices(cfg)
         wrist_rs_cam = cam["wrist_rs_cam"]
-        exo_rs_cam = cam["exo_rs_cam"]
+        # exo_rs_cam = cam["exo_rs_cam"]
         table_rs_cam = cam["table_rs_cam"]
     else:
         piper = None
@@ -174,7 +174,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
 
     if cfg.use_devices:
         wrist_rs_cam.start_recording()
-        exo_rs_cam.start_recording()
+        # exo_rs_cam.start_recording()
         table_rs_cam.start_recording()
 
     time.sleep(5)
@@ -194,7 +194,7 @@ def init_llp_runtime(cfg: LLPConfig) -> LLPRuntimeContext:
         piper=piper,
         table_rs_cam=table_rs_cam,
         wrist_rs_cam=wrist_rs_cam,
-        exo_rs_cam=exo_rs_cam,
+        # exo_rs_cam=exo_rs_cam,
     )
 
 
@@ -231,13 +231,15 @@ def llp_step(
     t_pred_start = time.time()
 
     # SmolVLA has automatic reset
-    # ctx.policy.reset()
+    ctx.policy.reset()
 
     with torch.no_grad():
         action_pred = ctx.policy.select_action(batch).squeeze()
 
+    step = 0
 
-    while not (len(ctx.policy._action_queue) < ctx.cfg.infer_chunk):
+
+    while (step < 50 - ctx.cfg.infer_chunk):
         with torch.no_grad():
             action_pred = ctx.policy.select_action(batch).squeeze()
         end_pose_data = action_pred[:6].cpu().to(dtype=int).tolist()
@@ -246,9 +248,8 @@ def llp_step(
         if ctx.piper is not None:
             ctrl_end_pose(ctx.piper, end_pose_data, gripper_data)
 
-
-
-        # print(f"[LLP] [{counter}] action_pred: ", action_pred)
+        step += 1
+        # print(f"[LLP] [{step}] action_pred: ", action_pred)
 
         time.sleep(0.2)
 

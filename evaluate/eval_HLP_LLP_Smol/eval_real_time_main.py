@@ -444,6 +444,7 @@ def eval_real_time_main_v4(
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))
             print(f"[MAIN] current_memory = f{current_memory} \n")
+            time.sleep(1.5)
             print("=========================================================[Action Done]=================================================================")
 
     finally:
@@ -463,7 +464,7 @@ if __name__ == "__main__":
     p.add_argument("--task_group", type=str, required=True)
 
     p.add_argument("--hlp_base", type=str, required=True)
-    p.add_argument("--hlp_adapter", type=str, required=True)
+    p.add_argument("--hlp_adapter", type=str, required=False)
     p.add_argument("--hlp_device", type=str, default="cuda:0")
     p.add_argument("--hlp_attn", type=str, default="sdpa")
 

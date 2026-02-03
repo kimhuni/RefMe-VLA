@@ -188,13 +188,41 @@ def make_step_prompt(task_text: str, allowed_actions: str, memory: Optional[Dict
         "Role: Robot arm HeLM Step Updater (unified DETECT+UPDATE mode).\n"
         "Goal: From the current image and memory, decide whether the current stage is completed, "
         "and output the correct memory state after this step.\n\n"
-        "Inputs: Task, Allowed_Action_Commands, Memory (may be None), Images.\n\n"
-        "Rules:\n"
-        "- Set Event_Detected=true ONLY if stage completion is visibly confirmed; otherwise false.\n"
-        "- If Memory is None: initialize memory by outputting the FIRST memory state for this stage and set Event_Detected=true.\n"
-        "- If Memory is not None and Event_Detected=false: COPY input Memory verbatim (do not change any characters).\n"
-        "- If Event_Detected=true: output the NEXT memory state for this stage (monotonic progress).\n\n"
-        "Output YAML ONLY with EXACT keys: Event_Detected, Action_Command, Working_Memory, Episodic_Context.\n\n"
+
+        "Inputs:\n"
+        "- Task: current stage instruction.\n"
+        "- Allowed_Action_Commands: valid low-level commands.\n"
+        "- Memory: {Action_Command, Working_Memory, Episodic_Context} (current state; may be None at the start).\n"
+        "- Images.\n\n"
+
+        "Event detection rules:\n"
+        "- Event_Detected=true ONLY if the stage completion (or clearly post-completion state) is visibly confirmed in the image.\n"
+        "- If there is any uncertainty (partial progress, occlusion, ambiguous state) -> Event_Detected=false.\n"
+        "- Use Task as the primary criterion; use Memory only to interpret what counts as completion.\n\n"
+
+        "Memory update rules (CRITICAL):\n"
+        "1) If Memory is None (initial state):\n"
+        "   - You MUST initialize the memory by outputting the FIRST memory state for this stage.\n"
+        "   - Set Event_Detected=true.\n"
+        "2) If Memory is NOT None and Event_Detected=false:\n"
+        "   - You MUST copy the input Memory EXACTLY (verbatim) to the output.\n"
+        "   - Do NOT change Action_Command, Working_Memory, or Episodic_Context in any way.\n"
+        "3) If Event_Detected=true:\n"
+        "   - You MUST output the NEXT memory state for this stage.\n"
+        "   - Progress must advance monotonically (no partial or intermediate states).\n"
+        "   - Episodic_Context may change ONLY if the next state changes it.\n\n"
+
+        "Field semantics:\n"
+        "- Action_Command: the next low-level command (must be from Allowed_Action_Commands).\n"
+        "- Working_Memory: encodes intra-stage progress (monotonic, task-consistent).\n"
+        "- Episodic_Context: accumulated cross-stage history (do not rewrite arbitrarily).\n\n"
+
+        "Output format:\n"
+        "- Output YAML ONLY.\n"
+        "- Output EXACTLY these keys:\n"
+        "  Event_Detected, Action_Command, Working_Memory, Episodic_Context\n"
+        "- No extra text or explanation.\n\n"
+
         f"Task: {task_text}\n"
         f"Allowed_Action_Commands:\n{allowed_actions}\n"
         f"Memory: {mem_line}\n"
@@ -300,40 +328,12 @@ def eval_real_time_main_v4(
                         f"[MAIN] task_id={sel_tid} inter=0 STEP@select {dt:.3f}s "
                         f"event={det} GI='{global_instruction}' Action='{current_memory.get('Action_Command', '')}'"
                     )
+                    current_task_id = sel_tid
 
-            # [Inter Episode Task] next inter (n): same task_id, switch to task_text[1] if exists, UPDATE 한번
-            # if kstate["next_inter"]:
-            #     kstate["next_inter"] = False
-            #     if current_task_id is None or global_instruction is None or current_memory is None:
-            #         logger.info("[MAIN] next_inter ignored (no active task)")
-            #     else:
-            #         spec = specs.get(current_task_id, None)
-            #         if spec is None:
-            #             logger.warning("[MAIN] next_inter: current_task_id spec not found")
-            #         elif current_inter_idx + 1 >= len(spec.task_text):
-            #             logger.info("[MAIN] next_inter: no further task_text (len<=1)")
-            #         else:
-            #             prev_mem = current_memory
-            #             current_inter_idx += 1
-            #             global_instruction = spec.task_text[current_inter_idx]
-            #             print("New global instruction:", global_instruction)
-            #             obs_pil_for_update = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
-            #             current_memory, dt = run_hlp_update(
-            #                 hlp=hlp,
-            #                 obs_pil=obs_pil_for_update,
-            #                 task_text=global_instruction,
-            #                 prev_memory=prev_mem,
-            #                 allowed_actions=spec.allowed_actions,
-            #                 event="task changed",
-            #                 n_images=1,
-            #             )
-            #             logger.info(
-            #                 f"[MAIN] next_inter -> inter={current_inter_idx} GI='{global_instruction}' "
-            #                 f"UPDATE {dt:.3f}s Action='{current_memory.get('Action_Command','')}'"
-            #             )
 
             # idle if no task
             if current_task_id is None or global_instruction is None or current_memory is None:
+                print(current_task_id, "and", global_instruction,"and", current_memory)
                 print("nothing to do")
                 time.sleep(3)
                 continue
@@ -364,13 +364,12 @@ def eval_real_time_main_v4(
             # UPDATE에서 재사용할 수 있게 캐시
             last_obs_pil = obs_pil
 
-            current_task_id = sel_tid
-            current_inter_idx = 0
+
             global_instruction = new_spec.task_text[0]
             print("Global_instruction: ", global_instruction)
 
             # unified STEP에서는 init을 위해 memory=None으로 시작
-            current_memory = None
+            # current_memory = None
 
             obs_pil_for_step = last_obs_pil if last_obs_pil is not None else _make_dummy_image()
             det, next_mem, dt = run_hlp_step(
@@ -388,21 +387,26 @@ def eval_real_time_main_v4(
             )
 
 
-            # [LLP] step - Action_Command
-            cmd = str(current_memory.get("Action_Command", "")).strip()
+            print("event: ", det)
+            if det:
+                llp_send_zero(llp_ctx)
 
-            if cmd and ((cmd != "done") and (cmd != "wait")):
-                print("[LLP] executing command: ", cmd)
-                llp_batch = create_llp_batch_from_obs(
-                    state=state,
-                    table_img=obs_img_t,
-                    wrist_img=_wrist_img_t,
-                    task=cmd,
-                )
-                t_pred, t_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
             else:
-                print("no action command")
-                t_llp = 0.0
+                # [LLP] step - Action_Command
+                cmd = str(current_memory.get("Action_Command", "")).strip()
+
+                if cmd and ((cmd != "done") and (cmd != "wait")):
+                    print("[LLP] executing command: ", cmd)
+                    llp_batch = create_llp_batch_from_obs(
+                        state=state,
+                        table_img=obs_img_t,
+                        wrist_img=_wrist_img_t,
+                        task=cmd,
+                    )
+                    t_pred, t_llp = llp_step(llp_ctx, task_text=cmd, batch=llp_batch)
+                else:
+                    print("no action command")
+                    t_llp = 0.0
 
             step += 1
             fps = step / max(1e-6, (time.time() - t_start))

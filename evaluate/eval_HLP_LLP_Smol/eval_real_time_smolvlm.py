@@ -119,20 +119,22 @@ class HLPSmolVLM:
         self.max_new_tokens_detect = max_new_tokens_detect
         self.max_new_tokens_update = max_new_tokens_update
 
-        # [수정] AutoModelForImageTextToText 사용
-        self.processor = AutoProcessor.from_pretrained(base_model_path, trust_remote_code=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             base_model_path,
-            dtype=torch.bfloat16,
+            dtype="bfloat16",
             _attn_implementation=attn_impl,
             device_map=device,
             trust_remote_code=True,
-        ).eval()
+        )
+        # [수정] AutoModelForImageTextToText 사용
+        self.processor = AutoProcessor.from_pretrained("/home/minji/Desktop/data/ckpt/SmolVLM-500M-Instruct", trust_remote_code=True)
 
-        if adapter_path:
-            from peft import PeftModel
-            self.model = PeftModel.from_pretrained(self.model, adapter_path)
-            print(f"[HLP] Adapter Loaded: {adapter_path}")
+        self.model.eval()
+
+        # if adapter_path:
+        #     from peft import PeftModel
+        #     self.model = PeftModel.from_pretrained(self.model, adapter_path)
+        #     print(f"[HLP] Adapter Loaded: {adapter_path}")
 
     @torch.no_grad()
     def _generate(self, images: List[Image.Image], system_prompt: str, user_text: str, max_tokens: int) -> str:
@@ -170,10 +172,14 @@ class HLPSmolVLM:
 
     def detect(self, obs_pil: List[Image.Image], user_text: str) -> Tuple[bool, str]:
         raw = self._generate(obs_pil, DETECT_SYSTEM, user_text, self.max_new_tokens_detect)
+        print("--------------------------------------------------------")
         print("\n[DETECT] Output:", raw)
+        print("--------------------------------------------------------")
         return parse_detect_yaml(raw)
 
     def update(self, obs_pil: List[Image.Image], user_text: str) -> Dict[str, str]:
         raw = self._generate(obs_pil, UPDATE_SYSTEM, user_text, self.max_new_tokens_update)
+        print("--------------------------------------------------------")
         print("\n[UPDATE] Output:", raw)
+        print("--------------------------------------------------------")
         return parse_update_yaml(raw)
