@@ -138,35 +138,37 @@ class HLPSmolVLM:
 
     @torch.no_grad()
     def _generate(self, images: List[Image.Image], system_prompt: str, user_text: str, max_tokens: int) -> str:
-        # 1. 메시지 구성 (잘 되는 코드와 동일하게)
-        # SmolVLM은 시스템 프롬프트 지원 여부에 따라 user 앞에 합치는 것이 더 안정적일 수 있음
-        full_user_text = f"{system_prompt}\n\n{user_text}"
+        # [수정] system_prompt를 따로 넣지 않습니다.
+        # 이미 user_text(make_detect_prompt의 결과)에 포함되어 있기 때문입니다.
 
+        # 오프라인 코드와 동일하게 단일 user 메시지 구조로 변경
         messages = [
             {
                 "role": "user",
-                "content": [{"type": "image"}] * len(images) + [{"type": "text", "text": full_user_text}]
+                # SmolVLM의 이미지 토큰 위치를 오프라인 95% 성공 시와 동일하게 배치
+                "content": [{"type": "image"}] * len(images) + [{"type": "text", "text": user_text}]
             }
         ]
 
-        # 2. 템플릿 적용
+        # 템플릿 적용
         prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
-        # 3. 인풋 생성 (중요: image_grid_thw 등이 섞이지 않도록 processor 결과물만 사용)
-        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device)
+        # [중요] 실시간 이미지가 BGR이라면 RGB로 변환되어 들어와야 함
+        # main 루프에서 처리하지 않았다면 여기서 강제 변환 (필요시)
+        # images = [img.convert("RGB") for img in images]
 
-        # 4. 생성 (잘 되는 코드와 동일한 인자 구성)
-        output_ids = self.model.generate(
+        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device, torch.bfloat16)
+
+        gen_ids = self.model.generate(
             **inputs,
             max_new_tokens=max_tokens,
             do_sample=False,
             pad_token_id=self.processor.tokenizer.pad_token_id,
         )
 
-        # 5. 디코딩 (입력 프롬프트 제외)
+        # 정확한 슬라이싱 (프롬프트 제외)
         prompt_len = inputs["input_ids"].shape[1]
-        generated_ids = output_ids[:, prompt_len:]
-        response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        response = self.processor.batch_decode(gen_ids[:, prompt_len:], skip_special_tokens=True)[0]
 
         return response.strip()
 
