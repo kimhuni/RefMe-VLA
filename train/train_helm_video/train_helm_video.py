@@ -16,8 +16,8 @@ CUDA_VISIBLE_DEVICES=7 python train/train_helm_video/train_helm_video.py \
   --train_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_train.jsonl \
   --val_jsonl /data/ghkim/helm_data/helm_video_task_5/merged/all_val.jsonl \
   --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_5_0125 \
-  --batch_size 3 \
-  --n_detect_pos 1 --n_detect_neg 1 --n_update 1 \
+  --batch_size 4 \
+  --n_detect_pos 2 --n_detect_neg 1 --n_update 1 \
   --max_pixels 602112 \
   --max_steps 30000 \
   --save_steps 500 \
@@ -26,19 +26,20 @@ CUDA_VISIBLE_DEVICES=7 python train/train_helm_video/train_helm_video.py \
   --wandb_run_name "HeLM_video_task_5_0125"
 
 
-CUDA_VISIBLE_DEVICES=6 torchrun --nproc_per_node=1 train/train_helm_video/train_helm_video.py \
+CUDA_VISIBLE_DEVICES=6,7 torchrun --nproc_per_node=2 train/train_helm_video/train_helm_video.py \
   --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_val.jsonl \
-  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_10_0125 \
-  --batch_size 3 \
-  --n_detect_pos 1 --n_detect_neg 1 --n_update 1 \
-  --max_pixels 602112 \
-  --max_steps 10000 \
+  --train_jsonl /data/ghkim/helm_data/press_button_in_order/extended/visual_memory_jsonl/train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/press_button_in_order/extended/visual_memory_jsonl/val.jsonl \
+  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_press_button_in_order_extended_0131 \
+  --batch_size 1 \
+  --n_detect_pos 0 --n_detect_neg 0 --n_update 1 \
+  --max_pixels 310000 \
+  --max_steps 30000 \
   --save_steps 500 \
+  --gradient_accumulation_steps 4 \
   --logging_steps 10 \
   --wandb_project "RefMe" \
-  --wandb_run_name "HeLM_video_task_10_0125"
+  --wandb_run_name "HeLM_video_press_button_in_order_extended_0131"
 """
 
 import argparse
@@ -215,10 +216,13 @@ def main():
         bnb_4bit_use_double_quant=True,
     )
 
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    device_map = {"": local_rank}
+
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         args.model_name_or_path,
         quantization_config=bnb_config,
-        device_map="auto",
+        device_map=device_map,
         torch_dtype=torch.bfloat16,
         attn_implementation="sdpa",
     )
@@ -226,7 +230,7 @@ def main():
 
     # LoRA 설정
     peft_config = LoraConfig(
-        r=32, lora_alpha=64, lora_dropout=0.05,
+        r=16, lora_alpha=32, lora_dropout=0.05,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
         bias="none", task_type="CAUSAL_LM"
     )
@@ -247,6 +251,7 @@ def main():
         # 기본값이 8이라서 터지는 것입니다. 1로 줄여주세요.
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
+        optim="paged_adamw_8bit",
 
         gradient_checkpointing=True,  # 체크포인팅 활성화
         gradient_checkpointing_kwargs={"use_reentrant": False},
@@ -264,7 +269,7 @@ def main():
         bf16=True,
         dataloader_num_workers=args.dataloader_num_workers,
         remove_unused_columns=False,  # Custom Collator 사용 시 필수
-        ddp_find_unused_parameters=True,  # DDP 경고 방지
+        ddp_find_unused_parameters=False,  # DDP 경고 방지
     )
 
     # 6. Trainer 초기화 및 학습 시작

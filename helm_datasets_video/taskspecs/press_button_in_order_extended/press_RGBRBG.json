@@ -1,0 +1,67 @@
+{
+  "task_id": "press_RGBRBG",
+  "inter": 0,
+  "intra": [6],
+  "task_text": ["press the red, green, blue, red, blue, green buttons in order"],
+  "episode_filters": [
+    [
+      { "tasks": "press the red button" },
+      { "tasks": "press the green button" },
+      { "tasks": "press the blue button" },
+      { "tasks": "press the red button" },
+      { "tasks": "press the blue button" },
+      { "tasks": "press the green button" }
+    ]
+  ],
+  "llp_commands": "press the blue button\npress the green button\npress the red button\ndone",
+  "event_list": "blue button pressed\ngreen button pressed\nred button pressed\ndone",
+  "event_grid": [
+    [
+      "red button pressed",
+      "green button pressed",
+      "blue button pressed",
+      "red button pressed",
+      "blue button pressed",
+      "green button pressed"
+    ]
+  ],
+  "memory_grid": [
+    [
+      {
+        "Action_Command": "press the red button",
+        "Working_Memory": "Progress: none (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the green button",
+        "Working_Memory": "Progress: red (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Progress: red, green (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the red button",
+        "Working_Memory": "Progress: red, green, blue (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the blue button",
+        "Working_Memory": "Progress: red, green, blue, red (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "press the green button",
+        "Working_Memory": "Progress: red, green, blue, red, blue (Goal: red, green, blue, red, blue, green)",
+        "Episodic_Context": "None"
+      },
+      {
+        "Action_Command": "done",
+        "Working_Memory": "task done (None)",
+        "Episodic_Context": "Previous_Progress: red, green, blue, red, blue, green"
+      }
+    ]
+  ]
+}

@@ -1,6 +1,10 @@
 """
 templates_visual.py
 Templates for Visual Memory Baseline (Detect & Update)
+python -m helm_datasets_video.build_videohelm \
+  --data_root "/data/ghkim/helm_data/open_drawer_with_object" \
+  --out_root="/data/ghkim/helm_data/video_helm/open_drawer_with_object" \
+  --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_video/taskspecs/open_drawer_with_object"
 """
 from typing import Dict, List, Optional
 import yaml
@@ -11,6 +15,31 @@ def dump_yaml(d: Dict) -> str:
 # -----------------------------------------------------------------------------
 # 1. DETECT MODE SYSTEM PROMPT (User Provided)
 # -----------------------------------------------------------------------------
+# DETECT_SYSTEM = (
+#     "Role: Robot arm Visual Event Detector (DETECT mode).\n"
+#     "Goal: Decide whether a stage-completion EVENT is visible in the current image, and output the event name.\n\n"
+#     "Inputs:\n"
+#     "- Task (Global_Instruction): the current stage instruction.\n"
+#     "- Event_List: newline-separated list of allowed event strings.\n"
+#     "- Action_Command: The current action being executed.\n"
+#     "- Images.\n\n"
+#     "Decision rules (be conservative):\n"
+#     "1) Use Task (Global_Instruction) as the PRIMARY criterion.\n"
+#     "2) Set Event_Detected=true ONLY when the completion state (or clearly post-completion state) is visible in image.\n"
+#     "   - If partial progress / occlusion / uncertainty -> Event_Detected=false.\n\n"
+#     "Event selection rules:\n"
+#     "- If Event_Detected=false: Event MUST be exactly 'none'.\n"
+#     "- If Event_Detected=true: Event MUST be EXACTLY one item from Event_List.\n"
+#     "- Do NOT invent new events. Use EXACT string match.\n\n"
+#     "Constraints:\n"
+#     "- Do not propose next actions.\n"
+#     "- Do not update or rewrite memory.\n"
+#     "- Output YAML only.\n\n"
+#     "Output YAML with EXACTLY these keys:\n"
+#     "- Event_Detected: boolean\n"
+#     "- Event: string\n"
+# )
+
 DETECT_SYSTEM = (
     "Role: Robot arm Visual Event Detector (DETECT mode).\n"
     "Goal: Decide whether a stage-completion EVENT is visible in the current image, and output the event name.\n\n"
@@ -21,8 +50,6 @@ DETECT_SYSTEM = (
     "- Images.\n\n"
     "Decision rules (be conservative):\n"
     "1) Use Task (Global_Instruction) as the PRIMARY criterion.\n"
-    "2) Set Event_Detected=true ONLY when the completion state (or clearly post-completion state) is visible in image.\n"
-    "   - If partial progress / occlusion / uncertainty -> Event_Detected=false.\n\n"
     "Event selection rules:\n"
     "- If Event_Detected=false: Event MUST be exactly 'none'.\n"
     "- If Event_Detected=true: Event MUST be EXACTLY one item from Event_List.\n"

@@ -8,15 +8,41 @@ Evaluation script for HeLM Video Baseline (Multi-frame Input).
 Supports Qwen2.5-VL with variable number of input images.
 
 export PYTHONPATH=$(pwd)
-CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_video/eval_helm_video.py \
-  --jsonl /data/ghkim/helm_data/helm_video_task_3/merged/all_val.jsonl \
-  --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
-  --adapter /backups/ghkim/HLP_HeLM_video/HeLM_video_task_3_0124/checkpoint-3000 \
-  --out_jsonl /data/ghkim/helm_data/helm_video_task_3/eval_results/video_3k_preds.jsonl \
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/all_val.jsonl \
+  --base_model /backups/ghkim/HLP_HeLM_video/HeLM_video_qwen3b_task_inter_0128_ddp_re/checkpoint-4000 \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/eval_results/video_4k_preds.jsonl \
   --batch_size 1 \
   --attn_impl sdpa \
-  --max_samples 500
+  --max_samples 50
+
+CUDA_VISIBLE_DEVICES=4 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/all_val.jsonl \
+  --base_model /backups/ghkim/HLP_HeLM_video/HeLM_video_qwen3b_task_inter_0128_ddp_re/checkpoint-5000 \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/eval_results/video_4k_preds.jsonl \
+  --batch_size 1 \
+  --attn_impl sdpa \
+  --max_samples 100
+  
+CUDA_VISIBLE_DEVICES=5 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/visual_memory_jsonl/val.jsonl \
+  --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
+  --adapter /backups/ghkim/HLP_HeLM_video/HeLM_video_find_object_in_drawer_0129_ddpre/checkpoint-500 \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/eval_results/video_500_preds.jsonl \
+  --batch_size 1 \
+  --attn_impl sdpa \
+  --max_samples 100
+  
+CUDA_VISIBLE_DEVICES=6 python evaluate/eval_helm_video/eval_helm_video.py \
+  --jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/visual_memory_jsonl/val.jsonl \
+  --base_model /ckpt/Qwen2.5-VL-7B-Instruct \
+  --out_jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/eval_results/video_5k_preds.jsonl \
+  --batch_size 1 \
+  --attn_impl sdpa \
+  --max_samples 100
 """
+max_pixels=310000
+# min_pixels=50176
 
 import argparse
 import json
@@ -257,7 +283,14 @@ class VideoEvalCollator:
 # Evaluation Logic
 # -------------------------
 def load_model(base_model, adapter, use_qlora, attn_impl):
-    processor = AutoProcessor.from_pretrained(base_model, trust_remote_code=True)
+    base_model_path = "/ckpt/Qwen2.5-VL-3B-Instruct"
+
+    processor = AutoProcessor.from_pretrained(
+        base_model_path,
+        trust_remote_code=True,
+        # min_pixels=min_pixels,
+        max_pixels=max_pixels,
+    )
     bnb_config = None
     if use_qlora:
         bnb_config = BitsAndBytesConfig(

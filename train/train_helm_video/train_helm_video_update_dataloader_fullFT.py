@@ -1,32 +1,34 @@
 """
 export PYTHONPATH=$(pwd)
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-CUDA_VISIBLE_DEVICES=7 python train/train_helm_video/train_helm_video_update_dataloader.py \
-  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/helm_video_task_10/merged/all_val.jsonl \
-  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_task_10_0125 \
-  --batch_size 3 \
-  --n_detect_pos 1 --n_detect_neg 1 --n_update 1 \
-  --max_pixels 602112 \
-  --max_steps 30000 \
-  --save_steps 500 \
-  --logging_steps 10 \
-  --wandb_project "RefMe" \
-  --wandb_run_name "HeLM_video_task_10_0125"
-
-CUDA_VISIBLE_DEVICES=6,7 torchrun --nproc_per_node=2 train/train_helm_video/train_helm_video_update_dataloader.py \
-  --model_name_or_path /ckpt/Qwen2.5-VL-7B-Instruct \
-  --train_jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/visual_memory_jsonl/train.jsonl \
-  --val_jsonl /data/ghkim/helm_data/helm_video_task_5/find_object_in_drawer/visual_memory_jsonl/val.jsonl \
-  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_find_object_in_drawer_0129 \
-  --detect_batch_size 8 \
+CUDA_VISIBLE_DEVICES=5 python train/train_helm_video/train_helm_video_update_dataloader_fullFT.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-3B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/helm_video_task_5/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_video_task_5/merged/all_val.jsonl \
+  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_qwen3b_task_5_0128 \
+  --gradient_accumulation_steps 4 \
+  --detect_batch_size 4 \
   --update_batch_size 1 \
   --max_steps 30000 \
   --save_steps 500 \
   --logging_steps 10 \
   --wandb_project "RefMe" \
-  --wandb_run_name "HeLM_video_find_object_in_drawer_0129"
+  --wandb_run_name "HLP_HeLM_video/HeLM_video_qwen3b_task_5_0128"
+
+CUDA_VISIBLE_DEVICES=6,7 torchrun --nproc_per_node=2 train/train_helm_video/train_helm_video_update_dataloader_fullFT.py \
+  --model_name_or_path /ckpt/Qwen2.5-VL-3B-Instruct \
+  --train_jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/all_train.jsonl \
+  --val_jsonl /data/ghkim/helm_data/helm_video_task_inter/merged/all_val.jsonl \
+  --output_dir /backups/ghkim/HLP_HeLM_video/HeLM_video_qwen3b_task_inter_0128_ddp_re \
+  --detect_batch_size 4 \
+  --update_batch_size 1 \
+  --gradient_accumulation_steps 4 \
+  --max_pixels 310000 \
+  --max_steps 30000 \
+  --save_steps 500 \
+  --logging_steps 10 \
+  --wandb_project "RefMe" \
+  --wandb_run_name "HeLM_video_qwen3b_task_inter_0128_ddp_re"
 """
 # train/train_video/train_video.py
 from __future__ import annotations
@@ -65,8 +67,22 @@ class AlternatingBatchSampler(BatchSampler):
         self.pools = dataset.get_pools()
 
         # 'detect' 통합 (pos + neg)
-        self.detect_indices = self.pools.get('detect_pos', []) + self.pools.get('detect_neg', [])
+        pos_indices = self.pools.get('detect_pos', [])
+        neg_indices = self.pools.get('detect_neg', [])
         self.update_indices = self.pools.get('update', [])
+
+        # 2. [수정] 긍정 데이터를 부정 데이터 개수만큼 늘리기 (Oversampling)
+        if len(pos_indices) > 0 and len(neg_indices) > 0:
+            # 더 많은 쪽의 개수에 맞춤 (보통 Neg가 많음)
+            max_len = max(len(pos_indices), len(neg_indices))
+
+            # 모자란 만큼 랜덤하게 채워넣기
+            import numpy as np
+            pos_indices = np.random.choice(pos_indices, max_len, replace=True).tolist()
+            neg_indices = np.random.choice(neg_indices, max_len, replace=True).tolist()
+
+        # 3. 이제 1:1 비율로 섞음
+        self.detect_indices = pos_indices + neg_indices
 
         self.detect_batch_size = detect_batch_size
         self.update_batch_size = update_batch_size
@@ -175,7 +191,7 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=2e-4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
     parser.add_argument("--max_pixels", type=int, default=602112)  # 224*224 ~ 640*640 수준 권장
-    parser.add_argument("--min_pixels", type=int, default=200704)
+    parser.add_argument("--min_pixels", type=int, default=50176)
     parser.add_argument("--dataloader_num_workers", type=int, default=4)
 
     # WandB
@@ -217,13 +233,13 @@ def main():
 
     print(f"[Data Info] Train Size: {len(train_ds)}, Val Size: {len(val_ds)}")
 
-    # 3. 모델 준비 (QLoRA)
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-    )
+    # # 3. 모델 준비 (QLoRA)
+    # bnb_config = BitsAndBytesConfig(
+    #     load_in_4bit=True,
+    #     bnb_4bit_quant_type="nf4",
+    #     bnb_4bit_compute_dtype=torch.bfloat16,
+    #     bnb_4bit_use_double_quant=True,
+    # )
 
     # model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     #     args.model_name_or_path,
@@ -237,34 +253,36 @@ def main():
 
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         args.model_name_or_path,
-        quantization_config=bnb_config,
+        # quantization_config=bnb_config,
         device_map=device_map,  # <--- 'auto' 대신 명시적 매핑 사용
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",
     )
 
-    model = prepare_model_for_kbit_training(model)
+    # ❄️ [수정] Vision Encoder 얼리기 (Freeze)
+    # Qwen2.5-VL의 시각 처리 부분인 'visual' 모듈을 찾아서 얼립니다.
+    if hasattr(model, "visual"):
+        print("❄️ Freezing Vision Encoder (model.visual)...")
+        for param in model.visual.parameters():
+            param.requires_grad = False
+    else:
+        print("⚠️ Warning: 'visual' module not found. Check model architecture.")
 
-    for name, module in model.named_modules():
-        if "norm" in name.lower():
-            module.to(torch.float32)  # 안정성을 위해 Norm은 fp32 유지
-        if "visual" in name.lower() or "vision" in name.lower():
-            module.to(torch.bfloat16)  # 비전 타워는 bf16 유지
+    # ❄️ [추가] 모델 전체 파라미터 중 학습되는 비율 출력 (확인용)
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    all_params = sum(p.numel() for p in model.parameters())
+    print(f"📊 Trainable params: {trainable_params} / {all_params} ({trainable_params / all_params:.2%})")
 
-    peft_config = LoraConfig(
-        r=32, lora_alpha=64, lora_dropout=0.05,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        bias="none", task_type="CAUSAL_LM"
-    )
-    model = get_peft_model(model, peft_config)
-    for name, module in model.named_modules():
-        # RoPE(Rotary Positional Embedding) 관련 모듈 찾기
-        if "rotary_emb" in name.lower():
-            print(f"✨ Casting RoPE buffers to bfloat16 for: {name}")
-            # 내부 버퍼(cos_cached, sin_cached)를 bfloat16으로 강제 변환
-            module.to(torch.bfloat16)
-
-    model.print_trainable_parameters()
+    # model = prepare_model_for_kbit_training(model)
+    #
+    # peft_config = LoraConfig(
+    #     r=32, lora_alpha=64, lora_dropout=0.05,
+    #     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    #     bias="none", task_type="CAUSAL_LM"
+    # )
+    # model = get_peft_model(model, peft_config)
+    model.gradient_checkpointing_enable()
+    # model.print_trainable_parameters()
 
     # 4. Data Collator 정의 (이 부분이 누락되어 있었음)
     data_collator = DataCollatorForVideoBaseline(train_ds.processor)
@@ -282,7 +300,7 @@ def main():
         per_device_eval_batch_size=1,
         optim="adamw_bnb_8bit",
 
-        gradient_accumulation_steps=8,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
 
@@ -297,7 +315,7 @@ def main():
         bf16=True,
         dataloader_num_workers=args.dataloader_num_workers,
         remove_unused_columns=False,
-        ddp_find_unused_parameters=True,
+        # ddp_find_unused_parameters=True,
     )
 
     # 6. Trainer 초기화

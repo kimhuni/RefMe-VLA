@@ -9,8 +9,8 @@ Usage:
 export PYTHONPATH=$(pwd)
 python helm_datasets_video/build_videohelm.py \
     --data_root "/data/ghkim/helm_data/press_button_in_order" \
-    --out_root "/data/ghkim/helm_data/press_button_in_order" \
-    --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_video/taskspec/press_in_order"
+    --out_root "/data/ghkim/helm_data/press_button_in_order/extended" \
+    --taskspecs_dir "/home/ghkim/codes/RefMe-VLA/helm_datasets_video/taskspecs/press_button_in_order_extended"
 """
 from __future__ import annotations
 
