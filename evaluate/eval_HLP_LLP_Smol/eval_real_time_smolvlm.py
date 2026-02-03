@@ -136,26 +136,37 @@ class HLPSmolVLM:
 
     @torch.no_grad()
     def _generate(self, images: List[Image.Image], system_prompt: str, user_text: str, max_tokens: int) -> str:
-        # [핵심 수정] SmolVLM은 시스템 프롬프트를 별도 role로 넣거나 텍스트 앞에 붙여야 함
+        # 1. 메시지 구성 (잘 되는 코드와 동일하게)
+        # SmolVLM은 시스템 프롬프트 지원 여부에 따라 user 앞에 합치는 것이 더 안정적일 수 있음
+        full_user_text = f"{system_prompt}\n\n{user_text}"
+
         messages = [
-            {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
-            {"role": "user", "content": [{"type": "image"}] * len(images) + [{"type": "text", "text": user_text}]},
+            {
+                "role": "user",
+                "content": [{"type": "image"}] * len(images) + [{"type": "text", "text": full_user_text}]
+            }
         ]
 
+        # 2. 템플릿 적용
         prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device, torch.bfloat16)
 
-        # [수정] image_grid_thw는 inputs에 포함되지 않음 (SmolVLM은 불필요)
-        gen_ids = self.model.generate(
+        # 3. 인풋 생성 (중요: image_grid_thw 등이 섞이지 않도록 processor 결과물만 사용)
+        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device)
+
+        # 4. 생성 (잘 되는 코드와 동일한 인자 구성)
+        output_ids = self.model.generate(
             **inputs,
             max_new_tokens=max_tokens,
             do_sample=False,
+            pad_token_id=self.processor.tokenizer.pad_token_id,
         )
 
-        # 프롬프트 제외하고 답변만 추출
-        in_len = inputs["input_ids"].shape[1]
-        out_text = self.processor.batch_decode(gen_ids[:, in_len:], skip_special_tokens=True)[0]
-        return out_text.strip()
+        # 5. 디코딩 (입력 프롬프트 제외)
+        prompt_len = inputs["input_ids"].shape[1]
+        generated_ids = output_ids[:, prompt_len:]
+        response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+        return response.strip()
 
     def detect(self, obs_pil: List[Image.Image], user_text: str) -> Tuple[bool, str]:
         raw = self._generate(obs_pil, DETECT_SYSTEM, user_text, self.max_new_tokens_detect)
