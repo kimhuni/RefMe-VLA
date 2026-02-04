@@ -157,7 +157,12 @@ class HLPSmolVLM:
         # main 루프에서 처리하지 않았다면 여기서 강제 변환 (필요시)
         # images = [img.convert("RGB") for img in images]
 
-        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device, torch.bfloat16)
+        # 수정된 로직
+        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(self.device)
+        # 픽셀 값만 모델의 데이터 타입(bf16)으로 변경
+        inputs["pixel_values"] = inputs["pixel_values"].to(self.model.dtype)
+        if "pixel_attention_mask" in inputs:
+            inputs["pixel_attention_mask"] = inputs["pixel_attention_mask"].to(self.model.dtype)
 
         gen_ids = self.model.generate(
             **inputs,
